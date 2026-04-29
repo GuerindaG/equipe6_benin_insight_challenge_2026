@@ -4,8 +4,8 @@ import io
 import zipfile
 import os
 
-def download_gdelt_day(date, colnames, output_dir="data/raw"):
-    """Télécharge et filtre les données pour une date précise."""
+def download_gdelt_file(date, colnames, output_dir="data/raw"):
+    """Téléchargement des données par rapport à une période donné."""
     base_url = "http://data.gdeltproject.org/events/"
     url = f"{base_url}{date}.export.CSV.zip"
     os.makedirs(output_dir, exist_ok=True)
