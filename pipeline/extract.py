@@ -5,7 +5,7 @@ import zipfile
 import os
 
 def download_gdelt_file(date, colnames, output_dir="data/raw"):
-    """Téléchargement des données par rapport à une période donné."""
+    """Téléchargement des données par rapport à une période donnée."""
     base_url = "http://data.gdeltproject.org/events/"
     url = f"{base_url}{date}.export.CSV.zip"
     os.makedirs(output_dir, exist_ok=True)
