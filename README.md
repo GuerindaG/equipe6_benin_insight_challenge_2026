@@ -28,7 +28,7 @@ Le pipeline exécute 3 étapes principales :
 
 ### 1. Extraction
 
-Téléchargement des données GDELT sur une période définie (en jours).
+Téléchargement des données GDELT sur une période définie .
 
 ### 2. Nettoyage
 
@@ -43,19 +43,18 @@ Téléchargement des données GDELT sur une période définie (en jours).
 
 ---
 
-## Lancement du pipeline
-
-```bash
-python main.py
-```
-
-ou avec période personnalisée :
-
-```python
-run_pipeline(days=365)
-```
-
----
+## Installation et Lancement du pipeline
+1- Créer un projet sur Google Cloud (console.cloud.google.com)
+2- Activer l'API BigQuery sur votre projet
+3- Créer un Service Account avec le rôle "Utilisateur BigQuery"
+4- Télécharger la clé JSON et la renommer key.json
+5- Cloner le projet 
+6- Installer les bibliothèques : pip install -r requirements.txt
+7- Créer un fichier .env à la racine du projet :
+        GCP_PROJECT_ID=votre-project-id
+        GOOGLE_APPLICATION_CREDENTIALS=./key.json
+8- Placer le fichier key.json à la racine du projet
+9- Exécuter : python main.py
 
 ## Outputs générés
 
@@ -97,23 +96,6 @@ OR Actor2CountryCode == 'BJ'
 * acteurs béninois à l’international
 * relations internationales
 
----
-
-## Période d’analyse
-
-La période est dynamique :
-
-```python
-run_pipeline(days=N)
-```
-
-Exemples :
-
-* `days=30` → 1 mois
-* `days=90` → 3 mois
-* `days=365` → 12 mois
-
----
 
 ## Remarque 
 
@@ -125,15 +107,4 @@ Le dataset final dépend directement du choix de filtrage dans `clean_data()` :
 
 
 
-**************step**********************
-1- Créer un projet sur Google Cloud (console.cloud.google.com)
-2- Activer l'API BigQuery sur votre projet
-3- Créer un Service Account avec le rôle "Utilisateur BigQuery"
-4- Télécharger la clé JSON et la renommer key.json
-5- Cloner le projet 
-6- Installer les bibliothèques : pip install -r requirements.txt
-7- Créer un fichier .env à la racine du projet :
-        GCP_PROJECT_ID=votre-project-id
-        GOOGLE_APPLICATION_CREDENTIALS=./key.json
-8- Placer le fichier key.json à la racine du projet
-9- Exécuter : python main.py
+
