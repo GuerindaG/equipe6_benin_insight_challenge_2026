@@ -14,3 +14,18 @@ Analyse des événements et tendances médiatiques au Bénin (2025-2026) via la 
         GOOGLE_APPLICATION_CREDENTIALS=./key.json
 8- Placer le fichier key.json à la racine du projet
 9- Exécuter : python main.py
+## Extraction des données
+
+Requête SQL utilisée sur BigQuery pour extraire les événements liés au Bénin en 2025 :
+
+```sql
+SELECT
+    *
+FROM
+    `gdelt-bq.gdeltv2.events`
+WHERE
+    ActionGeo_CountryCode = 'BN'
+    AND SQLDATE BETWEEN 20250101 AND 20251231
+```
+
+#
