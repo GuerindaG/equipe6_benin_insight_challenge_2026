@@ -6,13 +6,22 @@ Analyse des événements et tendances médiatiques au Bénin (2025-2026) via la 
 Requête SQL utilisée sur BigQuery pour extraire les événements liés au Bénin en 2025 :
 
 ```sql
-SELECT
-    *
-FROM
-    `gdelt-bq.gdeltv2.events`
-WHERE
+SELECT *
+FROM `gdelt-bq.gdeltv2.events`
+WHERE SQLDATE BETWEEN 20250101 AND 20251231
+AND (
     ActionGeo_CountryCode = 'BN'
-    AND SQLDATE BETWEEN 20250101 AND 20251231
+    OR Actor1CountryCode = 'BJ'
+    OR Actor2CountryCode = 'BJ'
+)
 ```
+
+**info :**
+
+Dans GDELT, le Bénin est identifié par deux codes principaux  :
+
+- FIPS Country Code : BN (Utilisé pour la géolocalisation des événements).
+
+- ISO Country Code : BJ (Utilisé pour identifier les acteurs béninois).
 
 #
