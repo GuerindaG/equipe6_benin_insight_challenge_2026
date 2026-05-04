@@ -1,49 +1,70 @@
+import os
 import pandas as pd
-from datetime import datetime
-from pipeline.extract import download_gdelt_file
+from dotenv import load_dotenv
+
+from pipeline.extract import download_data
 from pipeline.transform import clean_data
 from pipeline.processing import create_features
 
+load_dotenv()
 
-# Configuration
-COLNAMES = [
-    'GlobalEventID', 'Day', 'MonthYear', 'Year', 'FractionDate',
-    'Actor1Code', 'Actor1Name', 'Actor1CountryCode', 'Actor1KnownGroupCode', 'Actor1EthnicCode', 'Actor1Religion1Code', 'Actor1Religion2Code', 'Actor1Type1Code', 'Actor1Type2Code', 'Actor1Type3Code',
-    'Actor2Code', 'Actor2Name', 'Actor2CountryCode', 'Actor2KnownGroupCode', 'Actor2EthnicCode', 'Actor2Religion1Code', 'Actor2Religion2Code', 'Actor2Type1Code', 'Actor2Type2Code', 'Actor2Type3Code',
-    'IsRootEvent', 'EventCode', 'EventBaseCode', 'EventRootCode', 'QuadClass', 'GoldsteinScale', 'NumMentions', 'NumSources', 'NumArticles', 'AvgTone',
-    'Actor1Geo_Type', 'Actor1Geo_FullName', 'Actor1Geo_CountryCode', 'Actor1Geo_ADM1Code', 'Actor1Geo_Lat', 'Actor1Geo_Long', 'Actor1Geo_FeatureID',
-    'Actor2Geo_Type', 'Actor2Geo_FullName', 'Actor2Geo_CountryCode', 'Actor2Geo_ADM1Code', 'Actor2Geo_Lat', 'Actor2Geo_Long', 'Actor2Geo_FeatureID',
-    'ActionGeo_Type', 'ActionGeo_FullName', 'ActionGeo_CountryCode', 'ActionGeo_ADM1Code', 'ActionGeo_Lat', 'ActionGeo_Long', 'ActionGeo_FeatureID',
-    'DATEADDED', 'SOURCEURL'
-]
 
-def run_pipeline(days=365):
-    print(f"--- Démarrage du pipeline pour les {days} derniers jours ---")
-    dates = pd.date_range(end=datetime.now(), periods=days).strftime('%Y%m%d')
-    
-    all_data = []
-    for d in dates:
-        day_df = download_gdelt_file(d, COLNAMES)
-        if not day_df.empty:
-            all_data.append(day_df)
-            print(f"Date {d} récupérée.")
+def run_pipeline(
+    date_start: int,
+    date_end: int,
+    limit: int | None,
+):
+    print(f"\n{'='*55}")
+    print(f"  PIPELINE GDELT — Bénin Insights Challenge 2026")
+    print(f"  Période : {date_start} - {date_end}")
+    print(f"{'='*55}\n")
 
-    if not all_data:
+    # Extraction                                                    
+    project_id = os.getenv("GCP_PROJECT_ID")
+    if not project_id:
+        raise ValueError(
+            "GCP_PROJECT_ID non défini. "
+            "Vérifiez votre fichier .env."
+        )
+
+    raw_df = download_data(
+        project_id=project_id,
+        date_start=date_start,
+        date_end=date_end,
+        limit=limit,
+    )
+
+    if raw_df.empty:
         print("Aucune donnée trouvée.")
         return
 
-    # CONSOLIDATION 
-    full_df = pd.concat(all_data)
-    
-    # Nettoyage des données 
-    clean_df = clean_data(full_df)
-    clean_df.to_csv("data/processed/benin_cleaned_data.csv", index=False)
-    print("Fichier nettoyé avec succès.")
 
-    # Transformation  pour Data Scientist / ML
-    upated_df = create_features(clean_df)
-    upated_df.to_csv("data/processed/benin_trends.csv", index=False)
-    print("Fichier mis à jour .")
+    # Sauvegarde brute 
+    os.makedirs("data/raw", exist_ok=True)
+    raw_df.to_csv("data/raw/benin_raw.csv", index=False)
+    print(f"fichier sauvegardé - data/processed/benin_raw.csv\n")
+
+    # Nettoyage        
+    os.makedirs("data/processed", exist_ok=True)                                 
+    clean_df = clean_data(raw_df)
+    clean_df.to_csv("data/processed/benin_cleaned_data.csv", index=False)
+    print(f" Fichier nettoyé et sauvegardé - data/processed/benin_cleaned_data.csv\n")
+
+    # Agrégation  journalière 
+    trends_df = create_features(clean_df)
+    trends_df.to_csv("data/processed/benin_trends.csv", index=False)
+    print(f"Tendances sauvegardées - data/processed/benin_trends.csv\n")
+
+    print("Pipeline terminé avec succès !")
+    print(f"\nFichiers produits :")
+    print(f" data/processed/benin_raw.csv          — données brutes ")
+    print(f" data/processed/benin_cleaned_data.csv — dataset nettoyé ")
+    print(f" data/processed/benin_trends.csv       — agrégat journalier ")
+
 
 if __name__ == "__main__":
-    run_pipeline(days=3) # Mettre le nombre de jour qu'on désire
+    run_pipeline(
+        date_start=20250101,
+        date_end=20251231,
+        limit=1_000,# None = tout prendre, un nombre = limiter
+    )
