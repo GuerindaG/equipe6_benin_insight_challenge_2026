@@ -45,15 +45,25 @@ Téléchargement des données GDELT sur une période définie .
 
 ## Installation et Lancement du pipeline
 1- Créer un projet sur Google Cloud (console.cloud.google.com)
+
 2- Activer l'API BigQuery sur votre projet
+
 3- Créer un Service Account avec le rôle "Utilisateur BigQuery"
+
 4- Télécharger la clé JSON et la renommer key.json
+
 5- Cloner le projet 
+
 6- Installer les bibliothèques : pip install -r requirements.txt
+
 7- Créer un fichier .env à la racine du projet :
+
         GCP_PROJECT_ID=votre-project-id
+        
         GOOGLE_APPLICATION_CREDENTIALS=./key.json
+        
 8- Placer le fichier key.json à la racine du projet
+
 9- Exécuter : python main.py
 
 ## Outputs générés
@@ -68,8 +78,7 @@ Le pipeline produit deux datasets :
 
 ---
 
-## Logique de filtrage (important)
-
+## Logique de filtrage 
 Selon les objectifs business, le filtrage peut inclure :
 
 ### Option 1 : Strict (localisation uniquement)
