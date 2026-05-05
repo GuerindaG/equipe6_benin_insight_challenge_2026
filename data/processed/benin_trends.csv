@@ -12,3 +12,6 @@ day,event_count,goldsteinscale_mean,goldsteinscale_min,avgtone_mean,numarticles_
 2025-01-11,81,0.323,-10.0,-1.359,421,81,Négatif,Coopération verbale,46.244,-0.717
 2025-01-12,96,-0.475,-10.0,-2.783,600,96,Négatif,Coopération verbale,39.147,-1.635
 2025-01-13,61,-0.238,-10.0,-2.542,405,61,Négatif,Coopération verbale,37.29,-1.914
+Day,event_count,GoldsteinScale,AvgTone,NumArticles,event_volatility_7d
+2026-04-30,41,0.5536585365853658,0.8823780061766866,288,
+2026-05-01,27,-0.7111111111111112,-0.7124929645181015,127,
