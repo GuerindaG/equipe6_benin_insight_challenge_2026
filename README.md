@@ -47,9 +47,12 @@ Filtre principal :
 ```sql
 SELECT *
 FROM `gdelt-bq.gdeltv2.events`
-WHERE ActionGeo_CountryCode = 'BC'
-AND YEAR >= 2025
-LIMIT 10000
+WHERE SQLDATE BETWEEN 20250101 AND 20251231
+AND (
+    ActionGeo_CountryCode = 'BN'
+    OR Actor1CountryCode = 'BJ'
+    OR Actor2CountryCode = 'BJ'
+)
 ```
 
 Objectif :
