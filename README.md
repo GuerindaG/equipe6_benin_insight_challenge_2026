@@ -91,8 +91,7 @@ ActionGeo_CountryCode == 'BN'
 
 ---
 
-### Option 2 — Étendu (recommandé pour votre projet)
-
+### Option 2
 ```text
 ActionGeo_CountryCode == 'BN'
 OR Actor1CountryCode == 'BJ'
