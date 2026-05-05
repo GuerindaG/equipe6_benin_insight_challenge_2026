@@ -29,3 +29,9 @@ Dans GDELT, le Bénin est identifié par deux codes principaux  :
 - ISO Country Code : BJ (Utilisé pour identifier les acteurs béninois).
 
 #
+
+## Installation et lancement
+
+1-Cloner le projet
+2-Installer les bibliothèques via :  pip install -r requirements.txt
+3-Executer la commande suivante : python main.py
