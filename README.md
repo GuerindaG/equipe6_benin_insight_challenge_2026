@@ -99,7 +99,9 @@ Visualisations :
 
 ### 4. Dashboard interactif
 
-Dashboard développé avec **Streamlit**.
+Dashboard développé avec **Streamlit** et déployé sur **streamlit Community Cloud** 
+
+disponible via le lien suivant : https://equipe6benininsightchallenge2026.streamlit.app/ 
 
 Fonctionnalités :
 
