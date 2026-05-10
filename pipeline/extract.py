@@ -12,13 +12,19 @@ def get_bigquery_client(project_id: str) -> bigquery.Client:
 
 
 def download_data(
-   project_id: str,
+    project_id: str,
     date_start: int,
     date_end: int,
-    limit: int | None, 
+    limit: int | None,
 ) -> pd.DataFrame:
-    
-    """Télécharge les événements GDELT concernant le Bénin via BigQuery."""
+    """
+    Télécharge les événements GDELT concernant le Bénin via BigQuery.
+
+    Le Bénin utilise le code pays ISO-3166-1 alpha-2 : BJ.
+    On filtre sur ActionGeo_CountryCode = 'BJ' pour s'assurer
+    que l'événement s'est réellement déroulé au Bénin,
+    ainsi que sur les acteurs (Actor1/2) pouvant mentionner indirectement le Bénin.
+    """
     client = get_bigquery_client(project_id)
 
     year = int(str(date_start)[:4])
@@ -41,7 +47,7 @@ def download_data(
         WHERE YEAR = {year}
           AND SQLDATE BETWEEN {date_start} AND {date_end}
           AND (
-              ActionGeo_CountryCode = 'BN'
+              ActionGeo_CountryCode = 'BJ'
               OR Actor1CountryCode  = 'BJ'
               OR Actor2CountryCode  = 'BJ'
           )
@@ -49,7 +55,7 @@ def download_data(
         {limit_clause}
     """
 
-    print(f"Requête  en cours ({date_start} - {date_end}, limit={limit:,})…")
+    print(f"Requête en cours ({date_start} – {date_end}, limit={limit:,})…" if limit else f"Requête en cours ({date_start} – {date_end}, sans limite)…")
     df = client.query(query).to_dataframe()
     print(f"{len(df):,} lignes récupérées avec succès.")
     return df

@@ -246,7 +246,7 @@ notebooks/
 ### Lancer le dashboard
 
 ```bash
-streamlit run dashboard/app.py
+streamlit run dashboard/dashboard_benin.py
 ```
 
 ---

@@ -1,6 +1,30 @@
 pandas
-google-cloud-bigquery[pandas]
 numpy
+matplotlib
+seaborn
 python-dotenv
+requests
+beautifulsoup4
+html2text
+
+# Google BigQuery
+google-cloud-bigquery[pandas]
+
+# Dashboard
 streamlit
 plotly
+
+# NLP / ML (optionnel — scrap & analyse de sentiment)
+transformers
+torch
+tqdm
+
+# NLP — topic modelling (dashboard)
+bertopic
+spacy
+nltk
+scikit-learn
+
+# Format support
+pyarrow
+openpyxl

@@ -19,7 +19,9 @@ def run_pipeline(
     print(f"  Période : {date_start} - {date_end}")
     print(f"{'='*55}\n")
 
-    # Extraction                                                    
+    # ------------------------------------------------------------------
+    # 1. EXTRACTION
+    # ------------------------------------------------------------------
     project_id = os.getenv("GCP_PROJECT_ID")
     if not project_id:
         raise ValueError(
@@ -38,33 +40,42 @@ def run_pipeline(
         print("Aucune donnée trouvée.")
         return
 
-
-    # Sauvegarde brute 
+    # Sauvegarde brute
     os.makedirs("data/raw", exist_ok=True)
-    raw_df.to_csv("data/raw/benin_raw.csv", index=False)
-    print(f"fichier sauvegardé - data/processed/benin_raw.csv\n")
+    raw_path = "data/raw/benin_raw.csv"
+    raw_df.to_csv(raw_path, index=False)
+    print(f"Fichier sauvegardé — {raw_path}\n")
 
-    # Nettoyage        
-    os.makedirs("data/processed", exist_ok=True)                                 
+    # ------------------------------------------------------------------
+    # 2. TRANSFORMATION
+    # ------------------------------------------------------------------
+    os.makedirs("data/processed", exist_ok=True)
     clean_df = clean_data(raw_df)
-    clean_df.to_csv("data/processed/benin_cleaned_data.csv", index=False)
-    print(f" Fichier nettoyé et sauvegardé - data/processed/benin_cleaned_data.csv\n")
+    clean_path = "data/processed/benin_cleaned_data.csv"
+    clean_df.to_csv(clean_path, index=False)
+    print(f"Fichier nettoyé et sauvegardé — {clean_path}\n")
 
-    # Agrégation  journalière 
+    # ------------------------------------------------------------------
+    # 3. AGRÉGATION
+    # ------------------------------------------------------------------
     trends_df = create_features(clean_df)
-    trends_df.to_csv("data/processed/benin_trends.csv", index=False)
-    print(f"Tendances sauvegardées - data/processed/benin_trends.csv\n")
+    trends_path = "data/processed/benin_trends.csv"
+    trends_df.to_csv(trends_path, index=False)
+    print(f"Tendances sauvegardées — {trends_path}\n")
 
+    # ------------------------------------------------------------------
+    # RÉCAPITULATIF
+    # ------------------------------------------------------------------
     print("Pipeline terminé avec succès !")
     print(f"\nFichiers produits :")
-    print(f" data/processed/benin_raw.csv          — données brutes ")
-    print(f" data/processed/benin_cleaned_data.csv — dataset nettoyé ")
-    print(f" data/processed/benin_trends.csv       — agrégat journalier ")
+    print(f"  {raw_path:<45} — données brutes")
+    print(f"  {clean_path:<45} — dataset nettoyé")
+    print(f"  {trends_path:<45} — agrégat journalier")
 
 
 if __name__ == "__main__":
     run_pipeline(
         date_start=20250101,
         date_end=20251231,
-        limit=1_000,# None = tout prendre, un nombre = limiter
+        limit=1_000,  # None = tout prendre
     )
