@@ -219,3 +219,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+outputs/figures/*.html
+outputs/topics_per_article.csv
+outputs/*.png
+outputs/*.html

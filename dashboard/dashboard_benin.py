@@ -6,6 +6,7 @@ import re
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from urllib.parse import urlparse
+from pathlib import Path
 
 st.set_page_config(
     page_title="Bénin Insights Dashboard",
@@ -93,13 +94,58 @@ except Exception as e:
     st.error(f"Impossible de charger les données : {e}")
     st.stop()
 
+# Chargement des résultats de topic modeling (si disponibles)
+TOPICS_INFO_PATH = Path(__file__).parent.parent / "outputs/topics_info.csv"
+TOPICS_OVER_TIME_PATH = Path(__file__).parent.parent / "outputs/topics_over_time.csv"
+TOPICS_PER_ARTICLE_PATH = Path(__file__).parent.parent / "outputs/topics_per_article.csv"
+TOPIC_LABELS_PATH = Path(__file__).parent.parent / "outputs/topic_labels.csv"
+
+df_topics = None
+df_topics_time = None
+df_topics_art = None
+has_topics = False
+
+try:
+    df_topics = pd.read_csv(TOPICS_INFO_PATH)
+    df_topics_time = pd.read_csv(TOPICS_OVER_TIME_PATH)
+    df_topics_art = pd.read_csv(TOPICS_PER_ARTICLE_PATH)
+    has_topics = True
+except Exception:
+    pass
+
+# Labels français des topics (mapping manuel des plus pertinents)
+TOPIC_LABELS_FR = {
+    0: "Infrastructure & Développement",
+    1: "Jeunesse & Diplomatie",
+    3: "Santé & Gestion foncière (Edo)",
+    4: "Gouvernance & Sécurité",
+    6: "Défense & Forces armées",
+    7: "Politique électorale Nigeria",
+    9: "Criminalité & Justice",
+    11: "Kidnapping & Violence genrée",
+    13: "Patrimoine culturel & Dahomey",
+    15: "Relations régionales Afrique de l'Ouest",
+    16: "Tourisme & Investissement",
+    20: "Ressources naturelles & Eaux",
+    21: "Relations Bénin-Nigeria",
+    23: "Musées & Restitution patrimoniale",
+    25: "Tensions diplomatiques Niger",
+    26: "Relations avec le Qatar",
+    28: "Royauté du Bénin & Musées",
+    31: "Enlèvements & Rançons",
+    37: "Présence militaire française",
+    38: "Crise humanitaire (Borno)",
+    40: "Crise diplomatique Niger",
+    41: "Culture & Festival Vodun (Ouidah)",
+}
+
 with st.sidebar:
     st.markdown("## Bénin Insights")
     st.markdown("---")
     galerie = st.radio(
         "Navigation",
         ["Vue d'ensemble", "Couverture médiatique", "Sentiment & Perception",
-         "Acteurs & Diplomatie", "Digital & Tourisme", "Cyber-Vigilance"],
+         "Acteurs & Diplomatie", "Digital & Tourisme", "Cyber-Vigilance", "Topic Modeling"],
     )
     st.markdown("---")
     st.markdown("### Filtres")
@@ -452,6 +498,117 @@ elif galerie == "Cyber-Vigilance":
             st.plotly_chart(fig_neg, use_container_width=True)
     else:
         st.info("Aucun article détecté avec les mots-clés cyber-vigilance.")
+
+
+# ──────────────────────────────────────────────
+# TOPIC MODELING
+# ──────────────────────────────────────────────
+elif galerie == "Topic Modeling":
+    st.title("Topic Modeling & Thématiques médiatiques")
+
+    if not has_topics:
+        st.warning("Les données de topic modeling ne sont pas disponibles. Lancez `pipeline/topic_modeling.py` pour les générer.")
+    else:
+        # Préparation : exclure topic -1 (outliers)
+        df_t = df_topics[df_topics["Topic"] != -1].copy()
+        df_t["Label_FR"] = df_t["Topic"].map(TOPIC_LABELS_FR).fillna(df_t["Name"])
+
+        # KPIs
+        total_topics = len(df_t)
+        total_articles_topics = df_t["Count"].sum()
+        top_topic = df_t.loc[df_t["Count"].idxmax(), "Label_FR"]
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Topics détectés", total_topics)
+        c2.metric("Articles couverts", f"{total_articles_topics:,}")
+        c3.metric("Topic dominant", top_topic)
+
+        # Répartition des topics
+        st.markdown("### Répartition des thématiques détectées")
+        fig_b = px.bar(
+            df_t.sort_values("Count", ascending=True).tail(15),
+            x="Count", y="Label_FR", orientation="h",
+            color="Count", color_continuous_scale="Teal",
+            title="Top 15 topics par nombre d'articles"
+        )
+        fig_b.update_layout(template=TEMPLATE, height=500)
+        st.plotly_chart(fig_b, use_container_width=True)
+
+        # Évolution temporelle des principaux topics
+        st.markdown("### Évolution temporelle des thématiques")
+        # Agréger par mois
+        df_ttime = df_topics_time.copy()
+        df_ttime["Timestamp"] = pd.to_datetime(df_ttime["Timestamp"])
+        df_ttime["mois"] = df_ttime["Timestamp"].dt.to_period("M").astype(str)
+        
+        # Ne garder que les topics principaux (hors -1)
+        top_topics = df_t.sort_values("Count", ascending=False).head(8)["Topic"].tolist()
+        df_ttime_f = df_ttime[df_ttime["Topic"].isin(top_topics)].copy()
+        df_ttime_f["Label"] = df_ttime_f["Topic"].map(TOPIC_LABELS_FR).fillna("Topic " + df_ttime_f["Topic"].astype(str))
+        
+        monthly_topic = df_ttime_f.groupby(["mois", "Label"])["Frequency"].sum().reset_index()
+        
+        if len(monthly_topic) > 0:
+            fig_t = px.line(
+                monthly_topic, x="mois", y="Frequency", color="Label",
+                markers=True, title="Évolution mensuelle des thématiques dominantes",
+                color_discrete_sequence=px.colors.qualitative.Set2
+            )
+            fig_t.update_layout(template=TEMPLATE, height=500)
+            st.plotly_chart(fig_t, use_container_width=True)
+        else:
+            st.info("Pas assez de données temporelles pour les topics sélectionnés.")
+
+        # Tableau détaillé avec interprétations
+        st.markdown("### Détails et interprétations par topic")
+        
+        interpretations = {
+            "Infrastructure & Développement": "Articles portant sur les infrastructures (ponts, routes, centres de santé PHC) et les projets de développement. Indique les priorités d'investissement public.",
+            "Jeunesse & Diplomatie": "Mentions d'ambassadeurs, de programmes jeunesse et de représentation de la marque Bénin. Révèle le rayonnement diplomatique et culturel.",
+            "Santé & Gestion foncière (Edo)": "Couverture des questions de santé publique et foncière dans l'État d'Edo (Nigeria). Montre les enjeux transfrontaliers.",
+            "Gouvernance & Sécurité": "Focus sur la sécurité d'État, la gouvernance et les décisions administratives. Signale les tensions politiques.",
+            "Défense & Forces armées": "Actualité militaire, déploiement de troupes et opérations de sécurité. Point de vigilance sur la stabilité régionale.",
+            "Politique électorale Nigeria": "Couverture des partis politiques nigérians (PDP, APC) et des élections. Impact sur les relations Bénin-Nigeria.",
+            "Criminalité & Justice": "Faits divers liés à la police, aux arrestations et à la justice. Révèle les dynamiques sécuritaires locales.",
+            "Kidnapping & Violence genrée": "Enlèvements, prises d'otages et violences contre les femmes. Signaux de risque humanitaire.",
+            "Patrimoine culturel & Dahomey": "Actualité autour du patrimoine historique du Dahomey et des artefacts. Opportunité de soft power culturel.",
+            "Relations régionales Afrique de l'Ouest": "Diplomatie avec le Burkina Faso, le Niger et les voisins ouest-africains. Indicateur de cohésion régionale.",
+            "Tourisme & Investissement": "Mentions hôtelières (Sofitel Cotonou) et promotion touristique. Baromètre de l'attractivité économique.",
+            "Ressources naturelles & Eaux": "Questions liées aux ressources aquatiques et frontalières (Golf de Guinée). Enjeux économiques et écologiques.",
+            "Relations Bénin-Nigeria": "Interactions diplomatiques et commerciales entre le Bénin et le Nigeria. Thème stratégique pour la coopération bilatérale.",
+            "Musées & Restitution patrimoniale": "Actualité du MOWAA (Museum of West African Art) et des restitutions. Soft power et identité culturelle.",
+            "Tensions diplomatiques Niger": "Crise diplomatique avec le Niger (accusations, convocations). Risque géopolitique majeur à surveiller.",
+            "Relations avec le Qatar": "Coopération avec le Qatar (investissements, aides). Diversification des partenariats internationaux.",
+            "Royauté du Bénin & Musées": "Couverture de la royauté béninoise et des institutions muséales. Ancrage culturel et traditionnel.",
+            "Enlèvements & Rançons": "Kidnappings à but financier (ransom). Signal de criminalité organisée et insécurité.",
+            "Présence militaire française": "Déploiement militaire français en Côte d'Ivoire et dans la région. Influence sécuritaire extérieure.",
+            "Crise humanitaire (Borno)": "Situation humanitaire dans l'État de Borno (Nigeria). Impact potentiel sur les flux migratoires.",
+            "Crise diplomatique Niger": "Conflits diplomatiques répétés avec le Niger. Nécessite une veille active des tensions frontalières.",
+            "Culture & Festival Vodun (Ouidah)": "Promotion du festival vodun à Ouidah. Atout touristique et culturel majeur pour le rayonnement du Bénin.",
+        }
+        
+        df_display = df_t.sort_values("Count", ascending=False).head(15).copy()
+        df_display["Interprétation"] = df_display["Label_FR"].map(interpretations).fillna("Topic identifié par BERTopic.")
+        df_display["Mots-clés"] = df_display["Representation"].apply(lambda x: ", ".join(eval(x)[:6]) if pd.notna(x) else "")
+        
+        st.dataframe(
+            df_display[["Label_FR", "Count", "Mots-clés", "Interprétation"]].rename(columns={"Label_FR": "Thème", "Count": "Articles"}),
+            use_container_width=True, hide_index=True
+        )
+
+        # Wordcloud-like : mots-clés dominants
+        st.markdown("### Nuage des mots-clés dominants")
+        all_words = []
+        for _, row in df_t.head(10).iterrows():
+            words = eval(row["Representation"])[:5] if pd.notna(row["Representation"]) else []
+            for w in words:
+                all_words.append({"Thème": row["Label_FR"], "Mot": w, "Poids": 1})
+        if all_words:
+            df_words = pd.DataFrame(all_words)
+            fig_w = px.treemap(df_words, path=["Thème", "Mot"], title="Hiérarchie des mots-clés par thème")
+            fig_w.update_layout(template=TEMPLATE, height=500)
+            st.plotly_chart(fig_w, use_container_width=True)
+
 
 # PIED DE PAGE
 st.markdown("---")
