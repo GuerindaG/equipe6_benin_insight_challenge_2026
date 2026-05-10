@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # CONFIGURATION GÉNÉRALE DE LA PAGE
 
@@ -106,6 +107,7 @@ with st.sidebar:
             "Emergence Touristique",
             "Diplomatie Active",
             "Cyber-Vigilance & Désinformation",
+            "Modèles ML & NLP",
         ],
     )
 
@@ -167,7 +169,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown(
         '<p class="sidebar-info">Données : GDELT Project<br>'
-        'Période : 12 mois<br>'
+        'Période : 01/01/2025 - 31/12/2025<br>'
         'Équipe 6 : Bénin Insight Challenge 2026</p>',
         unsafe_allow_html=True,
     )
@@ -921,6 +923,346 @@ elif galerie == "Cyber-Vigilance & Désinformation":
         )
         fig_box.update_layout(showlegend=False)
         st.plotly_chart(fig_box, use_container_width=True)
+
+
+# GALERIE 6 : MODELES ML & NLP
+elif galerie == "Modèles ML & NLP":
+
+    st.title("Galerie 6 : Modèles Machine Learning & NLP")
+    st.markdown(
+        "Cette galerie intègre les modèles avancés d'analyse de texte développés sur les articles scrapés : "
+        "**analyse de sentiment** (BERT multilingue) et **topic modeling** (BERTopic). "
+        "Les résultats enrichissent l'analyse exploratoire avec des insights issus du contenu textuel des articles."
+    )
+
+    # Chargement des données ML avec fallback GitHub
+    SENTIMENT_URL = (
+        "https://raw.githubusercontent.com/GuerindaG/"
+        "equipe6_benin_insight_challenge_2026/main/models/outputs/sentiment_dl.csv"
+    )
+    ARTICLES_URL = (
+        "https://raw.githubusercontent.com/GuerindaG/"
+        "equipe6_benin_insight_challenge_2026/main/models/outputs/scraped_articles.csv"
+    )
+
+    @st.cache_data(show_spinner="Chargement des résultats ML...")
+    def charger_sentiment(url: str) -> pd.DataFrame:
+        df_sent = pd.read_csv(url, parse_dates=["date"])
+        return df_sent
+
+    @st.cache_data(show_spinner="Chargement des articles scrapés...")
+    def charger_articles(url: str) -> pd.DataFrame:
+        df_art = pd.read_csv(url)
+        df_art = df_art.dropna(subset=["text"])
+        df_art = df_art[df_art["text"].str.strip() != ""]
+        df_art["date_datetime"] = pd.to_datetime(df_art["SQLDATE"], errors="coerce")
+        return df_art
+
+    # Essayer local puis fallback GitHub
+    # Chargement des resultats de sentiment par article
+    SENTIMENT_ARTICLES_URL = (
+        "https://raw.githubusercontent.com/GuerindaG/"
+        "equipe6_benin_insight_challenge_2026/main/models/outputs/sentiment_articles.csv"
+    )
+    
+    @st.cache_data(show_spinner="Chargement des sentiments par article...")
+    def charger_sentiment_articles(url: str) -> pd.DataFrame:
+        df_sa = pd.read_csv(url, parse_dates=["date"])
+        return df_sa
+    
+    try:
+        df_sentiment = charger_sentiment("../models/outputs/sentiment_dl.csv")
+        source_sent = "local"
+    except Exception:
+        try:
+            df_sentiment = charger_sentiment(SENTIMENT_URL)
+            source_sent = "GitHub"
+        except Exception:
+            df_sentiment = pd.DataFrame()
+            source_sent = "indisponible"
+    
+    try:
+        df_sent_articles = charger_sentiment_articles("../models/outputs/sentiment_articles.csv")
+        source_sent_art = "local"
+    except Exception:
+        try:
+            df_sent_articles = charger_sentiment_articles(SENTIMENT_ARTICLES_URL)
+            source_sent_art = "GitHub"
+        except Exception:
+            df_sent_articles = pd.DataFrame()
+            source_sent_art = "indisponible"
+
+    try:
+        df_articles = charger_articles("../models/outputs/scraped_articles.csv")
+        source_art = "local"
+    except Exception:
+        try:
+            df_articles = charger_articles(ARTICLES_URL)
+            source_art = "GitHub"
+        except Exception:
+            df_articles = pd.DataFrame()
+            source_art = "indisponible"
+
+    st.caption(f"Sources chargées : sentiment = {source_sent}, articles = {source_art}")
+
+    # -- SECTION 6.1 : SENTIMENT BERT --
+    if len(df_sentiment) > 0:
+        st.markdown("---")
+        st.markdown('<p class="section-title">Evolution du sentiment mediatique (BERT multilingue)</p>',
+                    unsafe_allow_html=True)
+
+        col_g, col_d = st.columns([2, 1])
+
+        with col_g:
+            fig_sent = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                                     subplot_titles=("Nombre d'événements par jour", "Sentiment moyen"))
+            fig_sent.add_trace(go.Scatter(
+                x=df_sentiment["date"], y=df_sentiment["event_count"],
+                mode="lines", name="Événements", line=dict(color="steelblue")
+            ), row=1, col=1)
+            fig_sent.add_trace(go.Scatter(
+                x=df_sentiment["date"], y=df_sentiment["sentiment_mean"],
+                mode="lines", name="Sentiment", line=dict(color="crimson")
+            ), row=2, col=1)
+            fig_sent.add_hline(y=0, line_dash="dash", line_color="grey", row=2, col=1)
+            fig_sent.update_layout(
+                title="Evolution du sentiment mediatique - periode 2025 (BERT multilingue)",
+                template=TEMPLATE_PLOTLY, height=600
+            )
+            st.plotly_chart(fig_sent, use_container_width=True)
+
+            st.info(
+                "**Interpretation** : La série temporelle croise volume et opinion pour chaque jour analysé. "
+                "Un pic de volume sans changement de sentiment suggère une couverture factuelle neutre ; "
+                "un pic avec sentiment négatif est à investiguer. La ligne de référence à zéro permet "
+                "de visualiser rapidement les jours à tonalité favorable ou défavorable."
+            )
+
+        with col_d:
+            st.markdown('<p class="section-title">Repartition globale des sentiments</p>',
+                        unsafe_allow_html=True)
+
+            pct_pos = df_sentiment["pct_positif"].mean() * 100
+            pct_neg = df_sentiment["pct_negatif"].mean() * 100
+            pct_neu = 100 - pct_pos - pct_neg
+
+            fig_pie = go.Figure()
+            fig_pie.add_trace(go.Bar(
+                x=["Positif", "Neutre", "Négatif"],
+                y=[pct_pos, pct_neu, pct_neg],
+                marker_color=["seagreen", "lightgrey", "crimson"]
+            ))
+            fig_pie.update_layout(
+                title="Repartition moyenne des sentiments (BERT)",
+                template=TEMPLATE_PLOTLY,
+                yaxis_title="Pourcentage",
+                showlegend=False,
+            )
+            st.plotly_chart(fig_pie, use_container_width=True)
+
+            st.info(
+                "**Interpretation** : La répartition globale donne un aperçu de la perception sur "
+                "l'ensemble de la période. Une majorité de neutre est typique des données journalistiques ; "
+                "un excès de négatif est un indicateur de crise ou de biais médiatique."
+            )
+
+        # -- SECTION 6.2 : JOUR SPECIFIQUE --
+        st.markdown("---")
+        st.markdown('''<p class="section-title">Analyse du sentiment d'un jour specifique</p>''',
+                    unsafe_allow_html=True)
+
+        # Date picker for ML sentiment
+        if len(df_sentiment) > 0:
+            sent_min = df_sentiment["date"].min().date()
+            sent_max = df_sentiment["date"].max().date()
+        else:
+            sent_min = date_min
+            sent_max = date_max
+
+        date_cible = st.date_input(
+            "Selectionner une date a analyser (periode BERT disponible)",
+            value=sent_max,
+            min_value=sent_min,
+            max_value=sent_max,
+            key="date_ml"
+        )
+
+        col1, col2, col3 = st.columns(3)
+
+        jour_bert = df_sentiment[df_sentiment["date"].dt.date == date_cible]
+        if len(jour_bert) > 0:
+            row = jour_bert.iloc[0]
+            with col1:
+                carte_kpi("Événements", f"{row['event_count']:.0f}", f"{date_cible}")
+            with col2:
+                carte_kpi("Sentiment BERT", f"{row['sentiment_mean']:.3f}", "moyenne journaliere")
+            with col3:
+                signe_pos = f"{row['pct_positif']*100:.1f}%"
+                signe_neg = f"{row['pct_negatif']*100:.1f}%"
+                carte_kpi("Positif / Négatif", f"{signe_pos} / {signe_neg}", "distribution")
+
+            st.success(
+                f"Le {date_cible} présente un sentiment **"
+                f"{'Positif' if row['sentiment_mean'] >= 0.3 else ('Negatif' if row['sentiment_mean'] <= -0.3 else 'Neutre')}** "
+                f"(comparé à la moyenne globale = {df_sentiment['sentiment_mean'].mean():.3f})."
+            )
+        else:
+            # Fallback sur GDELT natif
+            df["date_str"] = df["SQLDATE"].dt.strftime("%Y-%m-%d")
+            jour_gdelt = df[df["date_str"] == str(date_cible)]
+            if len(jour_gdelt) > 0:
+                with col1:
+                    carte_kpi("Événements GDELT", f"{len(jour_gdelt)}", f"{date_cible}")
+                with col2:
+                    carte_kpi("AvgTone GDELT", f"{jour_gdelt['AvgTone'].mean():.3f}", "indicateur natif")
+                with col3:
+                    carte_kpi("Goldstein", f"{jour_gdelt['GoldsteinScale'].mean():.3f}", "intensite evenement")
+                st.info(
+                    f"Pas de données BERT pour le {date_cible}. Affichage des métriques GDELT natives. "
+                    f"La période GDELT couvre du {date_min} au {date_max}."
+                )
+            else:
+                st.warning(f"Aucune donnée disponible pour le {date_cible}.")
+
+        # -- SECTION 6.3 : CORRELATION --
+        st.markdown("---")
+        st.markdown('<p class="section-title">Correlation AvgTone GDELT vs Sentiment BERT</p>',
+                    unsafe_allow_html=True)
+
+        if len(df_sentiment) > 0:
+            # Calcul de l'AvgTone moyen par jour depuis les donnees GDELT brutes
+            df["date_only"] = df["SQLDATE"].dt.date
+            avg_tone_daily = df.groupby("date_only")["AvgTone"].mean().reset_index()
+            avg_tone_daily["date_only"] = pd.to_datetime(avg_tone_daily["date_only"])
+            avg_tone_daily.columns = ["date", "avg_tone_gdelt"]
+            
+            # Fusion avec les donnees de sentiment
+            df_sent_merged = df_sentiment.merge(avg_tone_daily, on="date", how="left")
+            df_sent_merged["avg_tone"] = df_sent_merged["avg_tone_gdelt"].fillna(df_sent_merged["avg_tone"])
+            
+            # Filtrer les jours avec les deux indicateurs
+            df_corr = df_sent_merged.dropna(subset=["avg_tone", "sentiment_mean"])
+            
+            if len(df_corr) > 0:
+                corr = df_corr["avg_tone"].corr(df_corr["sentiment_mean"])
+
+                fig_corr = go.Figure()
+                fig_corr.add_trace(go.Scatter(
+                    x=df_corr["avg_tone"], y=df_corr["sentiment_mean"],
+                    mode="markers+text", text=df_corr["date"].dt.strftime("%Y-%m-%d"),
+                    textposition="top center", marker=dict(size=12, color="steelblue"),
+                    name="Jours analysés"
+                ))
+
+                # Regression line
+                import numpy as np
+                z = np.polyfit(df_corr["avg_tone"], df_corr["sentiment_mean"], 1)
+                p = np.poly1d(z)
+                x_line = np.linspace(df_corr["avg_tone"].min(), df_corr["avg_tone"].max(), 100)
+                fig_corr.add_trace(go.Scatter(
+                    x=x_line, y=p(x_line), mode="lines",
+                    name="Regression lineaire", line=dict(color="crimson", dash="dash")
+                ))
+
+                fig_corr.update_layout(
+                    title=f"Correlation AvgTone GDELT vs Sentiment BERT (r = {corr:.3f}, n={len(df_corr)} jours)",
+                    xaxis_title="AvgTone (GDELT natif)",
+                    yaxis_title="Sentiment moyen (BERT)",
+                    template=TEMPLATE_PLOTLY, height=500
+                )
+                st.plotly_chart(fig_corr, use_container_width=True)
+
+                st.info(
+                    "**Interpretation** : La corrélation entre AvgTone (GDELT natif) et sentiment BERT "
+                    "valide la cohérence des deux approches. Un coefficient proche de +1 indique que les "
+                    "deux méthodes s'accordent ; proche de 0, elles captent des dimensions différentes de la tonalité. "
+                    "Les points éloignés de la droite de régression sont des jours atypiques."
+                )
+            else:
+                st.warning("Pas assez de données communes entre GDELT et sentiment BERT pour calculer la corrélation.")
+                st.info("Assurez-vous que les dates des données sentiment et GDELT se chevauchent.")
+
+    # -- SECTION 6.4 : TOPIC MODELING --
+    if len(df_articles) > 0:
+        st.markdown("---")
+        st.markdown('<p class="section-title">Topic Modeling avec BERTopic</p>',
+                    unsafe_allow_html=True)
+
+        st.markdown(
+            f"Articles scrapés disponibles : **{len(df_articles)} documents**. "
+            "Le modèle BERTopic extrait automatiquement les thèmes dominants via des embeddings multilingues."
+        )
+
+        try:
+            from bertopic import BERTopic
+            from sklearn.feature_extraction.text import CountVectorizer
+            import nltk
+            nltk.download("stopwords", quiet=True)
+            from nltk.corpus import stopwords
+
+            stop_words = set(stopwords.words("english") + stopwords.words("french"))
+
+            def simple_preprocess(text):
+                text = str(text).lower()
+                tokens = [w for w in text.split() if w.isalpha() and w not in stop_words and len(w) > 2]
+                return " ".join(tokens)
+
+            docs = df_articles["text"].apply(simple_preprocess).tolist()
+            docs = [d for d in docs if d.strip()]
+
+            vectorizer_model = CountVectorizer(
+                ngram_range=(1, 2), stop_words=list(stop_words), min_df=5
+            )
+
+            with st.spinner("Entraînement du modèle BERTopic..."):
+                topic_model = BERTopic(
+                    embedding_model="paraphrase-multilingual-MiniLM-L12-v2",
+                    vectorizer_model=vectorizer_model,
+                    min_topic_size=10,
+                    verbose=False,
+                )
+                topics, probs = topic_model.fit_transform(docs)
+
+            topic_info = topic_model.get_topic_info()
+            topic_info_display = topic_info[topic_info["Topic"] > -1].head(10)
+
+            col_g, col_d = st.columns([2, 1])
+            with col_g:
+                fig_topics = px.bar(
+                    topic_info_display, x="Name", y="Count",
+                    title="Top 10 thèmes identifiés par BERTopic",
+                    color_discrete_sequence=[COULEUR_PRINCIPALE],
+                    template=TEMPLATE_PLOTLY,
+                )
+                fig_topics.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig_topics, use_container_width=True)
+
+            with col_d:
+                st.markdown("**Résumé des topics**")
+                st.dataframe(
+                    topic_info_display[["Topic", "Name", "Count"]],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            st.info(
+                "**Interpretation** : Les topics détectés par BERTopic reflètent les thèmes dominants "
+                "dans la couverture médiatique sur le Bénin. Un topic 'Autres' (-1) regroupe les articles "
+                "aberrants ou non classables. La taille du topic indique son importance relative dans le corpus."
+            )
+
+        except Exception as e:
+            st.warning(f"Le modèle BERTopic n'a pas pu être chargé : {e}")
+            st.info(
+                "Pour activer le topic modeling, installez les dépendances : "
+                "`pip install bertopic spacy` et téléchargez les modèles linguistiques."
+            )
+
+    else:
+        st.warning(
+            "Les données ML (sentiment et articles) ne sont pas disponibles. "
+            "Vérifiez les chemins locaux ou la connexion à GitHub."
+        )
 
 # PIED DE PAGE
 st.markdown("---")
