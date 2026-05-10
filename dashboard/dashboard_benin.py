@@ -7,9 +7,6 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from urllib.parse import urlparse
 
-# ──────────────────────────────────────────────
-# CONFIGURATION
-# ──────────────────────────────────────────────
 st.set_page_config(
     page_title="Bénin Insights Dashboard",
     page_icon=None,
@@ -35,9 +32,6 @@ h1, h2, h3 { color: #1a5276 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ──────────────────────────────────────────────
-# CHARGEMENT DES DONNÉES
-# ──────────────────────────────────────────────
 DATA_URL = (
     "https://raw.githubusercontent.com/GuerindaG/"
     "equipe6_benin_insight_challenge_2026/main/data/raw/"
@@ -99,9 +93,6 @@ except Exception as e:
     st.error(f"Impossible de charger les données : {e}")
     st.stop()
 
-# ──────────────────────────────────────────────
-# BARRE LATÉRALE
-# ──────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## Bénin Insights")
     st.markdown("---")
@@ -123,9 +114,6 @@ with st.sidebar:
     st.markdown("---")
     st.markdown('<p class="sidebar-info">Données : GDELT Project 2025<br>Équipe 6 — Bénin Insight Challenge</p>', unsafe_allow_html=True)
 
-# ──────────────────────────────────────────────
-# VUE D'ENSEMBLE
-# ──────────────────────────────────────────────
 if galerie == "Vue d'ensemble":
     st.title("Vue d'ensemble — Bénin 2025")
 
@@ -176,9 +164,7 @@ if galerie == "Vue d'ensemble":
     fig_s.update_layout(template=TEMPLATE)
     st.plotly_chart(fig_s, use_container_width=True)
 
-# ──────────────────────────────────────────────
-# COUVERTURE MÉDIATIQUE
-# ──────────────────────────────────────────────
+
 elif galerie == "Couverture médiatique":
     st.title("Couverture médiatique")
 
@@ -222,9 +208,6 @@ elif galerie == "Couverture médiatique":
     fig_d.update_layout(template=TEMPLATE, height=450)
     st.plotly_chart(fig_d, use_container_width=True)
 
-# ──────────────────────────────────────────────
-# SENTIMENT & PERCEPTION
-# ──────────────────────────────────────────────
 elif galerie == "Sentiment & Perception":
     st.title("Sentiment & Perception")
 
@@ -367,9 +350,6 @@ elif galerie == "Acteurs & Diplomatie":
     fig_diplo.update_layout(template=TEMPLATE, height=400)
     st.plotly_chart(fig_diplo, use_container_width=True)
 
-# ──────────────────────────────────────────────
-# DIGITAL & TOURISME
-# ──────────────────────────────────────────────
 elif galerie == "Digital & Tourisme":
     st.title("Digital, Tourisme & Attractivité")
 
@@ -424,9 +404,6 @@ elif galerie == "Digital & Tourisme":
     else:
         st.info("Aucun article touristique détecté.")
 
-# ──────────────────────────────────────────────
-# CYBER-VIGILANCE
-# ──────────────────────────────────────────────
 elif galerie == "Cyber-Vigilance":
     st.title("Cyber-Vigilance & Désinformation")
 
