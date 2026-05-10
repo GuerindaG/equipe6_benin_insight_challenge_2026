@@ -155,6 +155,13 @@ Conformément au règlement du challenge, nous déclarons l’usage d’IA dans 
 Outil principal :
 - **Google Gemini**
 
+**Agents IA de code employés :**
+- **GitHub Copilot / Codex** — suggestions de code, autocomplétion
+- **Claude Code** — structuration du workflow, réfactorisation, débogage
+- **OpenCode** — correction des erreurs de merge, restauration des fichiers perdus, standardisation des colonnes, nettoyage des CSV corrompus
+
+> Ces agents ont été utilisés comme assistants de développement, mais toutes les décisions analytiques, validations métier et interprétations finales ont été réalisées par l'équipe.
+
 Utilisations :
 
 ### Documentation
