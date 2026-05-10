@@ -4,1272 +4,482 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from urllib.parse import urlparse
 
-# CONFIGURATION GÉNÉRALE DE LA PAGE
-
+# ──────────────────────────────────────────────
+# CONFIGURATION
+# ──────────────────────────────────────────────
 st.set_page_config(
-    page_title="Bénin Media Intelligence Dashboard",
+    page_title="Bénin Insights Dashboard",
     page_icon="🇧🇯",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Style CSS 
+COULEUR_PRINCIPALE = "#006BA6"
+COULEUR_POS = "#2E8B57"
+COULEUR_NEG = "#B22222"
+COULEUR_NEUTRE = "#808080"
+TEMPLATE = "plotly_white"
+
+# CSS custom
 st.markdown("""
 <style>
-    .metric-card {
-        background-color: #f8f9fa;
-        border-left: 4px solid #1a5276;
-        padding: 12px 16px;
-        border-radius: 4px;
-        margin-bottom: 8px;
-    }
-    .metric-label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-    .metric-value { font-size: 28px; font-weight: bold; color: #1a5276; }
-    .metric-note  { font-size: 11px; color: #888; margin-top: 4px; }
-    .section-title { font-size: 18px; font-weight: 600; color: #1a5276; margin-bottom: 4px; }
-    .sidebar-info  { font-size: 12px; color: #555; line-height: 1.6; }
+:root { --primary: #006BA6; --bg: #f8f9fa; }
+.block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
+h1, h2, h3 { color: #1a5276 !important; }
+.stMetric > div > div > div { font-size: 1.8rem !important; }
+.kpi-row { display: flex; gap: 1rem; margin-bottom: 1rem; }
+.sidebar-info { font-size: 13px; color: #555; line-height: 1.6; }
 </style>
 """, unsafe_allow_html=True)
 
-
-# Téléchargement depuis GitHub 
+# ──────────────────────────────────────────────
+# CHARGEMENT DES DONNÉES
+# ──────────────────────────────────────────────
 DATA_URL = (
     "https://raw.githubusercontent.com/GuerindaG/"
     "equipe6_benin_insight_challenge_2026/main/data/raw/"
     "bq-results-20260502-112631-1777721378470.csv"
 )
 
-@st.cache_data(show_spinner="Chargement des données GDELT...")
-def charger_donnees(url: str) -> pd.DataFrame:
-    """
-    Charge et nettoie le jeu de données GDELT depuis GitHub.
-    Le résultat est mis en cache pour éviter de re-télécharger à chaque interaction.
-    """
-    df = pd.read_csv(url)
+code_pays = {
+    'BEN':'Bénin', 'BJ':'Bénin', 'USA':'États-Unis', 'CHN':'Chine', 'FRA':'France',
+    'GBR':'R.-U.', 'NGA':'Nigéria', 'NER':'Niger', 'BFA':'Burkina Faso',
+    "CIV":"Côte d'Ivoire", 'TGO':'Togo', 'GHA':'Ghana', 'DEU':'Allemagne',
+    'RUS':'Russie', 'IND':'Inde', 'CAN':'Canada', 'AUS':'Australie', 'JPN':'Japon',
+    'BRA':'Brésil', 'ZAF':'Af. du Sud', 'ARE':'Émirats Arabes Unis',
+    'SAU':'Arabie Saoudite', 'KEN':'Kenya', 'EGY':'Égypte', 'DZA':'Algérie',
+    'MAR':'Maroc', 'SEN':'Sénégal', 'MLI':'Mali', 'LBR':'Liberia',
+    'LCA':'Sainte-Lucie', 'UNO':'ONU', 'IGO':'Org. internationale',
+}
 
-    # Conversion de la date
-    df["SQLDATE"] = pd.to_datetime(df["SQLDATE"], format="%Y%m%d")
-    df["date"]    = df["SQLDATE"]
-    df["mois"]    = df["date"].dt.to_period("M").astype(str)
+mapping_themes = {
+    "01": "Diplomatie / Déclarations", "02": "Appels / Demandes",
+    "03": "Coopération", "04": "Consultations",
+    "05": "Engagements diplomatiques", "06": "Aide matérielle",
+    "07": "Fourniture d'aide", "08": "Rendition / Retrait",
+    "09": "Enquêtes", "10": "Demandes d'action",
+    "11": "Désapprobation", "12": "Rejets",
+    "13": "Menaces", "14": "Protestations",
+    "15": "Mobilisation forcée", "16": "Réduction de présence",
+    "17": "Coercition", "18": "Agression physique",
+    "19": "Combats", "20": "Utilisation d'armes",
+}
 
-    # Traduction des codes événements GDELT en libellés lisibles
-    mapping_themes = {
-        "01": "Diplomatie / Déclarations",
-        "02": "Appels / Demandes",
-        "03": "Coopération",
-        "04": "Consultations",
-        "05": "Engagements diplomatiques",
-        "06": "Aide matérielle",
-        "07": "Fourniture d'aide",
-        "08": "Rendition / Retrait",
-        "09": "Enquêtes",
-        "10": "Demandes d'action",
-        "11": "Désapprobation",
-        "12": "Rejets",
-        "13": "Menaces",
-        "14": "Protestations",
-        "15": "Mobilisation forcée",
-        "16": "Réduction de présence",
-        "17": "Coercition",
-        "18": "Agression physique",
-        "19": "Combats",
-        "20": "Utilisation d'armes",
-    }
-    df["EventRootCode"] = df["EventRootCode"].astype(str).str.zfill(2)
-    df["Theme"]         = df["EventRootCode"].map(mapping_themes).fillna("Autre")
+@st.cache_data(show_spinner="Chargement des données GDELT…")
+def charger_donnees(url):
+    df = pd.read_csv(url, engine='python', on_bad_lines='skip')
+    df.columns = [c.strip() for c in df.columns]
 
-    # Etiquette de tonalité
+    df["SQLDATE"] = pd.to_datetime(df["SQLDATE"], format="%Y%m%d", errors="coerce")
+    df["date"] = df["SQLDATE"]
+    df["mois"] = df["date"].dt.to_period("M").astype(str)
     df["AvgTone"] = pd.to_numeric(df["AvgTone"], errors="coerce")
-    df["ton_label"] = df["AvgTone"].apply(
-        lambda x: "Positif" if x > 1 else ("Negatif" if x < -1 else "Neutre")
-    )
+    df["GoldsteinScale"] = pd.to_numeric(df["GoldsteinScale"], errors="coerce")
+    df["NumArticles"] = pd.to_numeric(df["NumArticles"], errors="coerce")
+    df["NumMentions"] = pd.to_numeric(df["NumMentions"], errors="coerce")
+    df["NumSources"] = pd.to_numeric(df["NumSources"], errors="coerce")
 
+    df["EventRootCode"] = df["EventRootCode"].astype(str).str.zfill(2)
+    df["Theme"] = df["EventRootCode"].map(mapping_themes).fillna("Autre")
+
+    df["ton_label"] = df["AvgTone"].apply(
+        lambda x: "Positif" if x > 1 else ("Négatif" if x < -1 else "Neutre")
+    )
+    df["domain"] = df["SOURCEURL"].apply(
+        lambda u: urlparse(str(u)).netloc.replace("www.", "") if pd.notna(u) else "inconnu"
+    )
     return df
 
-
-# Chargement et message en cas d'erreur
 try:
     df = charger_donnees(DATA_URL)
 except Exception as e:
     st.error(f"Impossible de charger les données : {e}")
     st.stop()
 
-
-# BARRE LATÉRALE 
+# ──────────────────────────────────────────────
+# BARRE LATÉRALE
+# ──────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## Navigation")
+    st.markdown("## 🇧🇯 Bénin Insights")
+    st.markdown("---")
     galerie = st.radio(
-        "Choisir une galerie d'analyse",
-        options=[
-            "Vue d'ensemble",
-            "Rayonnement Digital & Innovation",
-            "Emergence Touristique",
-            "Diplomatie Active",
-            "Cyber-Vigilance & Désinformation",
-            "Modèles ML & NLP",
-        ],
+        "Navigation",
+        ["Vue d'ensemble", "Couverture médiatique", "Sentiment & Perception",
+         "Acteurs & Diplomatie", "Digital & Tourisme", "Cyber-Vigilance"],
     )
-
     st.markdown("---")
-    st.markdown("### Filtres globaux")
+    st.markdown("### Filtres")
+    date_min, date_max = df["date"].min().date(), df["date"].max().date()
+    plage = st.date_input("Période", value=(date_min, date_max), min_value=date_min, max_value=date_max)
 
-    # Filtre temporel
-    date_min = df["date"].min().date()
-    date_max = df["date"].max().date()
-    plage = st.date_input(
-        "Période analysée",
-        value=(date_min, date_max),
-        min_value=date_min,
-        max_value=date_max,
-    )
-
-    # Application du filtre de date
     if isinstance(plage, (list, tuple)) and len(plage) == 2:
-        df_filtre = df[
-            (df["date"].dt.date >= plage[0]) &
-            (df["date"].dt.date <= plage[1])
-        ]
+        df_f = df[(df["date"].dt.date >= plage[0]) & (df["date"].dt.date <= plage[1])]
     else:
-        df_filtre = df.copy()
-    
-      # =========================
-    # SECTION ANALYSE JOURNALIÈRE
-    # =========================
-    st.markdown("---")
-    st.markdown("### Analyse journalière des sentiments")
-
-    jour_selectionne = st.date_input(
-        "Choisir un jour à analyser",
-        value=date_max,
-        min_value=date_min,
-        max_value=date_max,
-        key="jour_sentiment"
-    )
-
-    df_jour = df[df["date"].dt.date == jour_selectionne].copy()
-
-    st.caption(f"{len(df_jour)} article(s) trouvé(s)")
-
-    # aperçu rapide
-    if len(df_jour) > 0:
-        with st.expander("Voir les articles du jour"):
-            colonnes_affichage = [
-                col for col in ["SOURCEURL", "title", "AvgTone"]
-                if col in df_jour.columns
-            ]
-            st.dataframe(
-                df_jour[colonnes_affichage].head(20),
-                use_container_width=True,
-                hide_index=True
-            )
-    else:
-        st.info("Aucun article disponible pour cette date.")
+        df_f = df.copy()
 
     st.markdown("---")
-    st.markdown(
-        '<p class="sidebar-info">Données : GDELT Project<br>'
-        'Période : 01/01/2025 - 31/12/2025<br>'
-        'Équipe 6 : Bénin Insight Challenge 2026</p>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<p class="sidebar-info">Données : GDELT Project 2025<br>Équipe 6 — Bénin Insight Challenge</p>', unsafe_allow_html=True)
 
-# FONCTIONS UTILITAIRES POUR LES GRAPHIQUES
-COULEUR_PRINCIPALE = "#1a5276"
-COULEUR_POSITIVE   = "#1D9E75"
-COULEUR_NEGATIVE   = "#E24B4A"
-TEMPLATE_PLOTLY    = "plotly_white"
-
-
-def carte_kpi(label: str, valeur: str, note: str = "") -> None:
-    """Affiche un indicateur clé (KPI) sous forme de carte simple."""
-    st.markdown(
-        f'<div class="metric-card">'
-        f'<div class="metric-label">{label}</div>'
-        f'<div class="metric-value">{valeur}</div>'
-        f'<div class="metric-note">{note}</div>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
-
-
-def graphique_evolution_temporelle(df_local: pd.DataFrame, titre: str) -> go.Figure:
-    """Courbe d'évolution du nombre d'articles par mois."""
-    par_mois = df_local.groupby("mois").size().reset_index(name="Nombre d'articles")
-    fig = px.area(
-        par_mois,
-        x="mois",
-        y="Nombre d'articles",
-        title=titre,
-        template=TEMPLATE_PLOTLY,
-        color_discrete_sequence=[COULEUR_PRINCIPALE],
-    )
-    fig.update_layout(
-        xaxis_title="Mois",
-        yaxis_title="Volume d'articles",
-        xaxis_tickangle=-45,
-        hovermode="x unified",
-    )
-    return fig
-
-
-# GALERIE 1 : VUE D'ENSEMBLE
-
+# ──────────────────────────────────────────────
+# VUE D'ENSEMBLE
+# ──────────────────────────────────────────────
 if galerie == "Vue d'ensemble":
+    st.title("🇧🇯 Vue d'ensemble — Bénin 2025")
 
-    st.title("Bénin : Tableau de bord médiatique international")
-    st.markdown(
-        
-        "Comment le Bénin est-il perçu, cité et analysé par les médias internationaux ? "
-        "Ce tableau de bord transforme des millions de signaux médiatiques (base GDELT) "
-        "en intelligence stratégique pour les décideurs."
-        
-        "Panorama de la couverture médiatique du Bénin dans la base de données GDELT "
-        "sur une période de 12 mois. Utilisez la barre latérale pour naviguer entre les galeries thématiques."
-    )
-
-    # KPIs globaux
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        carte_kpi("Total articles", f"{len(df_filtre):,}", "sur la période sélectionnée")
-    with col2:
-        ton_moyen = df_filtre["AvgTone"].mean()
-        signe = "+" if ton_moyen > 0 else ""
-        carte_kpi("Tonalité moyenne", f"{signe}{ton_moyen:.2f}", "score AvgTone GDELT")
-    with col3:
-        nb_acteurs = df_filtre["Actor1Name"].nunique()
-        carte_kpi("Acteurs identifiés", f"{nb_acteurs:,}", "entités distinctes citées")
-    with col4:
-        nb_lieux = df_filtre["ActionGeo_FullName"].nunique()
-        carte_kpi("Lieux couverts", f"{nb_lieux:,}", "zones géographiques citées")
-
-    st.markdown("---")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Événements", f"{len(df_f):,}")
+    c2.metric("Articles", f"{df_f['NumArticles'].sum():,.0f}")
+    c3.metric("Tonalité moy.", f"{df_f['AvgTone'].mean():.2f}")
+    c4.metric("Sources médiatiques", f"{df_f['domain'].nunique()}")
 
     # Évolution temporelle
-    col_g, col_d = st.columns([2, 1])
+    st.markdown("### Évolution de la couverture médiatique")
+    monthly = df_f.groupby("mois").agg(
+        evenements=("GLOBALEVENTID", "nunique"),
+        articles=("NumArticles", "sum"),
+        avg_tone=("AvgTone", "mean"),
+    ).reset_index()
 
-    with col_g:
-        st.markdown('<p class="section-title">Evolution du volume d\'articles</p>', unsafe_allow_html=True)
-        fig_evo = graphique_evolution_temporelle(df_filtre, "Volume d'articles sur le Bénin par mois")
-        st.plotly_chart(fig_evo, use_container_width=True)
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                        subplot_titles=("Volume d'événements", "Tonalité moyenne"),
+                        vertical_spacing=0.10)
+    fig.add_trace(go.Scatter(x=monthly["mois"], y=monthly["evenements"],
+                             mode="lines+markers", name="Événements",
+                             line=dict(color=COULEUR_PRINCIPALE)), row=1, col=1)
+    fig.add_trace(go.Scatter(x=monthly["mois"], y=monthly["avg_tone"],
+                             mode="lines+markers", name="AvgTone",
+                             line=dict(color=COULEUR_POS)), row=2, col=1)
+    fig.add_hline(y=0, line_dash="dot", line_color="gray", row=2, col=1)
+    fig.update_layout(template=TEMPLATE, height=550, showlegend=True)
+    st.plotly_chart(fig, use_container_width=True)
 
-    with col_d:
-        st.markdown('<p class="section-title">Répartition des thèmes</p>', unsafe_allow_html=True)
-        theme_counts = df_filtre["Theme"].value_counts().head(10).reset_index()
-        theme_counts.columns = ["Theme", "Nombre"]
-        fig_themes = px.bar(
-            theme_counts,
-            x="Nombre",
-            y="Theme",
-            orientation="h",
-            template=TEMPLATE_PLOTLY,
-            color_discrete_sequence=[COULEUR_PRINCIPALE],
-        )
-        fig_themes.update_layout(
-            yaxis={"categoryorder": "total ascending"},
-            xaxis_title="Nombre d'articles",
-            yaxis_title="",
-            showlegend=False,
-        )
-        st.plotly_chart(fig_themes, use_container_width=True)
+    # Thèmes dominants
+    st.markdown("### Thèmes dominants")
+    themes = df_f["Theme"].value_counts().head(10).reset_index()
+    themes.columns = ["Thème", "Événements"]
+    fig_t = px.bar(themes, x="Événements", y="Thème", orientation="h",
+                    color="Événements", color_continuous_scale="Blues",
+                    title="Top 10 des thèmes associés au Bénin")
+    fig_t.update_layout(template=TEMPLATE, height=420)
+    st.plotly_chart(fig_t, use_container_width=True)
 
-    st.markdown("---")
+    # Sentiment
+    st.markdown("### Répartition du sentiment")
+    sent = df_f["ton_label"].value_counts().reset_index()
+    sent.columns = ["Sentiment", "Nombre"]
+    colors = {"Positif": COULEUR_POS, "Neutre": COULEUR_NEUTRE, "Négatif": COULEUR_NEG}
+    fig_s = px.pie(sent, names="Sentiment", values="Nombre", color="Sentiment",
+                   color_discrete_map=colors, title="Classification de la couverture médiatique")
+    fig_s.update_layout(template=TEMPLATE)
+    st.plotly_chart(fig_s, use_container_width=True)
 
-    # Sentiment + Acteurs
-    col_s, col_a = st.columns(2)
+# ──────────────────────────────────────────────
+# COUVERTURE MÉDIATIQUE
+# ──────────────────────────────────────────────
+elif galerie == "Couverture médiatique":
+    st.title("📊 Couverture médiatique")
 
-    with col_s:
-        st.markdown('<p class="section-title">Distribution de la tonalité médiatique</p>', unsafe_allow_html=True)
-        fig_ton = px.histogram(
-            df_filtre,
-            x="AvgTone",
-            nbins=80,
-            template=TEMPLATE_PLOTLY,
-            color_discrete_sequence=[COULEUR_PRINCIPALE],
-            opacity=0.85,
-            labels={"AvgTone": "Score AvgTone (négatif < 0 < positif)"},
-        )
-        fig_ton.add_vline(x=0, line_dash="dash", line_color="red",
-                          annotation_text="Neutre", annotation_position="top right")
-        fig_ton.update_layout(showlegend=False, bargap=0.05)
-        st.plotly_chart(fig_ton, use_container_width=True)
-        st.caption("Un score négatif indique une couverture défavorable ; un score positif, une couverture favorable.")
+    daily = df_f.groupby("date").agg(
+        evenements=("GLOBALEVENTID", "nunique"),
+        articles=("NumArticles", "sum"),
+    ).reset_index()
 
-    with col_a:
-        st.markdown('<p class="section-title">Top 10 des acteurs les plus cités</p>', unsafe_allow_html=True)
-        acteurs = df_filtre["Actor1Name"].dropna().value_counts().head(10).reset_index()
-        acteurs.columns = ["Acteur", "Apparitions"]
-        fig_act = px.bar(
-            acteurs,
-            x="Apparitions",
-            y="Acteur",
-            orientation="h",
-            template=TEMPLATE_PLOTLY,
-            color="Apparitions",
-            color_continuous_scale="Blues",
-        )
-        fig_act.update_layout(
-            yaxis={"categoryorder": "total ascending"},
-            xaxis_title="Nombre d'apparitions",
-            yaxis_title="",
-            coloraxis_showscale=False,
-        )
-        st.plotly_chart(fig_act, use_container_width=True)
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                        subplot_titles=("Événements quotidiens", "Articles quotidiens"),
+                        vertical_spacing=0.10)
+    fig.add_trace(go.Scatter(x=daily["date"], y=daily["evenements"],
+                             mode="lines", name="Événements", line=dict(color=COULEUR_PRINCIPALE)), row=1, col=1)
+    fig.add_trace(go.Scatter(x=daily["date"], y=daily["articles"],
+                             mode="lines", name="Articles", line=dict(color="seagreen")), row=2, col=1)
+    fig.update_layout(template=TEMPLATE, height=550, showlegend=True)
+    st.plotly_chart(fig, use_container_width=True)
 
-# GALERIE 2 : RAYONNEMENT DIGITAL & INNOVATION
+    # Détection de pics
+    mean_e = daily["evenements"].mean()
+    std_e = daily["evenements"].std()
+    daily["z"] = (daily["evenements"] - mean_e) / std_e
+    pics = daily[daily["z"] > 2]
 
-elif galerie == "Rayonnement Digital & Innovation":
+    c1, c2 = st.columns(2)
+    c1.metric("Pics détectés (Z>2)", f"{len(pics)}")
+    c2.metric("Moy. quotidienne", f"{mean_e:.0f} événements/jour")
 
-    st.title("Galerie 2 : RAYONNEMENT DIGITAL & INNOVATION")
-    st.markdown(
-        "Cette galerie mesure l'impact des investissements technologiques du Bénin "
-        "(Sèmè City, e-services, télécoms) sur sa couverture médiatique internationale."
-    )
+    if len(pics) > 0:
+        st.markdown("### Jours de pic")
+        st.dataframe(pics[["date","evenements","z"]].sort_values("z", ascending=False).head(10),
+                     use_container_width=True, hide_index=True)
 
-    # Filtrage des articles tech
-    mots_cles_tech = ["TECHNOLOGY", "INNOVATION", "TELECOM", "EDUCATION", "SCIENCE",
-                      "STARTUP", "DIGITAL", "TECH", "SEME", "FIBER", "FIBRE"]
-    pattern_tech = "|".join(mots_cles_tech)
+    # Top domaines
+    st.markdown("### Top 15 domaines médiatiques")
+    top_dom = df_f["domain"].value_counts().head(15).reset_index()
+    top_dom.columns = ["Domaine", "Articles"]
+    fig_d = px.bar(top_dom, x="Articles", y="Domaine", orientation="h",
+                   color="Articles", color_continuous_scale="magma",
+                   title="Sources médiatiques couvrant le Bénin")
+    fig_d.update_layout(template=TEMPLATE, height=450)
+    st.plotly_chart(fig_d, use_container_width=True)
 
-    # On cherche dans les colonnes texte disponibles 
-    masque_tech = (
-        df_filtre["SOURCEURL"].astype(str).str.upper().str.contains(pattern_tech, na=False) |
-        df_filtre["Actor1Name"].astype(str).str.upper().str.contains(pattern_tech, na=False)
-    )
-    df_tech = df_filtre[masque_tech].copy()
+# ──────────────────────────────────────────────
+# SENTIMENT & PERCEPTION
+# ──────────────────────────────────────────────
+elif galerie == "Sentiment & Perception":
+    st.title("💬 Sentiment & Perception")
 
-    # KPIs
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        carte_kpi("Articles Tech identifiés", f"{len(df_tech):,}", "filtre : TECHNOLOGY, INNOVATION, TELECOM…")
-    with col2:
-        if len(df_tech) > 0:
-            ton_tech = df_tech["AvgTone"].mean()
-            signe = "+" if ton_tech > 0 else ""
-            carte_kpi("Indice de Confiance Tech", f"{signe}{ton_tech:.2f}", "tonalité moyenne des articles tech")
-        else:
-            carte_kpi("Indice de Confiance Tech", "N/A", "pas assez de données")
-    with col3:
-        pct_tech = (len(df_tech) / len(df_filtre) * 100) if len(df_filtre) > 0 else 0
-        carte_kpi("Part de voix Tech", f"{pct_tech:.1f}%", "du volume total d'articles Bénin")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("AvgTone moyen", f"{df_f['AvgTone'].mean():.2f}")
+    c2.metric("Goldstein moyen", f"{df_f['GoldsteinScale'].mean():.2f}")
+    c3.metric("% Positif", f"{(df_f['ton_label']=='Positif').mean()*100:.1f}%")
 
-    st.markdown("---")
+    # Distribution
+    fig = make_subplots(rows=1, cols=2,
+                        subplot_titles=("Distribution AvgTone", "Distribution GoldsteinScale"))
+    fig.add_trace(go.Histogram(x=df_f["AvgTone"], nbinsx=60, marker_color=COULEUR_PRINCIPALE, name="AvgTone"), row=1, col=1)
+    fig.add_trace(go.Histogram(x=df_f["GoldsteinScale"], nbinsx=60, marker_color="seagreen", name="Goldstein"), row=1, col=2)
+    fig.update_layout(template=TEMPLATE, showlegend=False, height=380)
+    st.plotly_chart(fig, use_container_width=True)
 
-    if len(df_tech) > 0:
+    # Évolution mensuelle
+    monthly_s = df_f.groupby("mois").agg(
+        avg_tone=("AvgTone", "mean"),
+        avg_goldstein=("GoldsteinScale", "mean"),
+    ).reset_index()
 
-        col_g, col_d = st.columns([2, 1])
+    fig2 = make_subplots(specs=[[{"secondary_y": True}]])
+    fig2.add_trace(go.Scatter(x=monthly_s["mois"], y=monthly_s["avg_tone"],
+                              mode="lines+markers", name="AvgTone", line=dict(color=COULEUR_PRINCIPALE)), secondary_y=False)
+    fig2.add_trace(go.Scatter(x=monthly_s["mois"], y=monthly_s["avg_goldstein"],
+                              mode="lines+markers", name="Goldstein", line=dict(color="seagreen")), secondary_y=True)
+    fig2.add_hline(y=0, line_dash="dot", line_color="gray", secondary_y=False)
+    fig2.update_layout(title="Évolution mensuelle de la perception", template=TEMPLATE, height=420)
+    fig2.update_yaxes(title_text="AvgTone", secondary_y=False)
+    fig2.update_yaxes(title_text="GoldsteinScale", secondary_y=True)
+    st.plotly_chart(fig2, use_container_width=True)
 
-        with col_g:
-            st.markdown('<p class="section-title">Volume d\'articles Tech sur le Bénin (évolution mensuelle)</p>',
-                        unsafe_allow_html=True)
-            fig_tech = graphique_evolution_temporelle(df_tech, "Articles Tech & Innovation")
-            st.plotly_chart(fig_tech, use_container_width=True)
+    # Sentiment par pays
+    st.markdown("### Tonalité par pays partenaire")
+    df_sp = df_f.dropna(subset=["Actor1CountryCode", "AvgTone"])
+    df_sp = df_sp[~df_sp["Actor1CountryCode"].isin(["BEN","BJ"])]
+    top_c = df_sp["Actor1CountryCode"].value_counts().head(12).index
+    df_top = df_sp[df_sp["Actor1CountryCode"].isin(top_c)]
+    sent_c = df_top.groupby("Actor1CountryCode").agg(
+        avg_tone=("AvgTone", "mean"), count=("GLOBALEVENTID", "nunique")
+    ).reset_index()
+    sent_c["Pays"] = sent_c["Actor1CountryCode"].map(code_pays).fillna(sent_c["Actor1CountryCode"])
+    fig_c = px.bar(sent_c.sort_values("avg_tone"), x="avg_tone", y="Pays",
+                   color="avg_tone", color_continuous_scale="RdYlGn",
+                   title="Tonalité moyenne par pays (hors Bénin)")
+    fig_c.update_layout(template=TEMPLATE, height=450)
+    st.plotly_chart(fig_c, use_container_width=True)
 
-        with col_d:
-            st.markdown('<p class="section-title">Top mots-clés détectés dans les URLs</p>',
-                        unsafe_allow_html=True)
-            # Comptage simple des mots-clés
-            comptage = {}
-            for mot in mots_cles_tech:
-                n = df_filtre["SOURCEURL"].astype(str).str.upper().str.contains(mot, na=False).sum()
-                if n > 0:
-                    comptage[mot] = n
-            df_comptage = pd.DataFrame(list(comptage.items()), columns=["Mot-clé", "Occurrences"])
-            df_comptage = df_comptage.sort_values("Occurrences", ascending=False)
-            fig_kw = px.bar(
-                df_comptage,
-                x="Occurrences",
-                y="Mot-clé",
-                orientation="h",
-                template=TEMPLATE_PLOTLY,
-                color_discrete_sequence=[COULEUR_PRINCIPALE],
-            )
-            fig_kw.update_layout(
-                yaxis={"categoryorder": "total ascending"},
-                yaxis_title="",
-                xaxis_title="Occurrences dans les URLs",
-            )
-            st.plotly_chart(fig_kw, use_container_width=True)
+    # Sentiment par type d'événement
+    st.markdown("### Sentiment par type d'événement")
+    sent_ev = df_f.groupby("Theme").agg(
+        avg_tone=("AvgTone", "mean"), count=("GLOBALEVENTID", "nunique")
+    ).reset_index().sort_values("count", ascending=False).head(10)
+    fig_ev = px.bar(sent_ev, x="avg_tone", y="Theme", orientation="h",
+                    color="avg_tone", color_continuous_scale="RdYlGn",
+                    title="Tonalité par type d'événement (CAMEO)")
+    fig_ev.update_layout(template=TEMPLATE, height=400)
+    st.plotly_chart(fig_ev, use_container_width=True)
 
-        # "Le Plus" : Top 5 sources les plus relayées
-        st.markdown("---")
-        st.markdown('<p class="section-title">Les 5 articles Tech les plus relayés</p>',
-                    unsafe_allow_html=True)
-        st.caption("Classement par nombre de mentions : proxy du relais médiatique.")
+# ──────────────────────────────────────────────
+# ACTEURS & DIPLOMATIE
+# ──────────────────────────────────────────────
+elif galerie == "Acteurs & Diplomatie":
+    st.title("🌍 Acteurs & Diplomatie")
 
-        if "NumMentions" in df_tech.columns:
-            df_tech["NumMentions"] = pd.to_numeric(df_tech["NumMentions"], errors="coerce")
-            top5 = (
-                df_tech[["SOURCEURL", "NumMentions", "date", "AvgTone"]]
-                .dropna(subset=["SOURCEURL", "NumMentions"])
-                .sort_values("NumMentions", ascending=False)
-                .head(5)
-                .reset_index(drop=True)
-            )
-            top5.index = top5.index + 1
-            top5.columns = ["URL Source", "Nb Mentions", "Date", "Tonalité"]
-            top5["Date"] = top5["Date"].dt.strftime("%d/%m/%Y")
-            top5["Tonalité"] = top5["Tonalité"].round(2)
-            st.dataframe(top5, use_container_width=True)
-        else:
-            st.info("Colonne NumMentions non disponible dans ce jeu de données.")
+    # Pays les plus mentionnés
+    st.markdown("### Pays les plus mentionnés avec le Bénin")
+    countries = pd.concat([
+        df_f["Actor1CountryCode"].map(code_pays).fillna(df_f["Actor1CountryCode"]),
+        df_f["Actor2CountryCode"].map(code_pays).fillna(df_f["Actor2CountryCode"]),
+    ], ignore_index=True)
+    countries = countries[countries != "Bénin"].value_counts().head(15).reset_index()
+    countries.columns = ["Pays", "Mentions"]
+    fig_p = px.bar(countries, x="Mentions", y="Pays", orientation="h",
+                   color="Mentions", color_continuous_scale="Blues",
+                   title="Top 15 pays partenaires")
+    fig_p.update_layout(template=TEMPLATE, height=450)
+    st.plotly_chart(fig_p, use_container_width=True)
+
+    # Acteurs
+    st.markdown("### Acteurs / entités les plus cités")
+    actors = pd.concat([df_f["Actor1Name"].dropna(), df_f["Actor2Name"].dropna()])
+    actors = actors.str.strip().str.upper()
+    actors = actors[actors != "BENIN"].value_counts().head(15).reset_index()
+    actors.columns = ["Acteur", "Fréquence"]
+    fig_a = px.bar(actors, x="Fréquence", y="Acteur", orientation="h",
+                   color="Fréquence", color_continuous_scale="Viridis",
+                   title="Top 15 des acteurs")
+    fig_a.update_layout(template=TEMPLATE, height=420)
+    st.plotly_chart(fig_a, use_container_width=True)
+
+    # Sankey
+    st.markdown("### Flux d'interactions médiatiques")
+    flux = df_f[["Actor1CountryCode","Actor2CountryCode","NumArticles"]].dropna()
+    flux = flux[flux["Actor1CountryCode"] != flux["Actor2CountryCode"]]
+    flux_bj = flux[(flux["Actor1CountryCode"]=="BEN") | (flux["Actor2CountryCode"]=="BEN")].copy()
+
+    if len(flux_bj) > 0:
+        sources, targets, values = [], [], []
+        for _, row in flux_bj.iterrows():
+            a1, a2, val = row["Actor1CountryCode"], row["Actor2CountryCode"], row["NumArticles"]
+            s = code_pays.get(a1, a1) if a1 == "BEN" else code_pays.get(a2, a2)
+            t = code_pays.get(a2, a2) if a1 == "BEN" else code_pays.get(a1, a1)
+            sources.append(s); targets.append(t); values.append(val)
+
+        flux_df = pd.DataFrame({"source": sources, "target": targets, "value": values})
+        flux_agg = flux_df.groupby(["source","target"])["value"].sum().reset_index()
+        flux_agg = flux_agg.sort_values("value", ascending=False).head(20)
+        all_nodes = list(pd.unique(flux_agg[["source","target"]].values.ravel()))
+        node_idx = {n: i for i, n in enumerate(all_nodes)}
+
+        fig_sankey = go.Figure(data=[go.Sankey(
+            node=dict(label=all_nodes, color="lightblue"),
+            link=dict(
+                source=[node_idx[s] for s in flux_agg["source"]],
+                target=[node_idx[t] for t in flux_agg["target"]],
+                value=flux_agg["value"],
+            ))])
+        fig_sankey.update_layout(title="Flux d'interactions via le Bénin (Top 20)", template=TEMPLATE, height=500)
+        st.plotly_chart(fig_sankey, use_container_width=True)
     else:
-        st.warning(
-            "Aucun article lié aux thèmes Tech/Innovation trouvé sur la période sélectionnée. "
-            "Essayez d'élargir la plage de dates."
-        )
+        st.info("Aucun flux trouvé pour le diagramme de Sankey.")
 
-# GALERIE 3 : EMERGENCE TOURISTIQUE
+    # Diplomatie hors francophonie
+    st.markdown("### Diplomatie hors francophonie")
+    targets_d = ["USA","CHN","NGA","GBR","ARE","JPN","IND","DEU","RUS","BRA"]
+    codes_t = targets_d + ["BEN"]
+    flux_d = df_f[["Actor1CountryCode","Actor2CountryCode","AvgTone","NumArticles"]].dropna()
+    flux_d = flux_d[(flux_d["Actor1CountryCode"].isin(codes_t)) & (flux_d["Actor2CountryCode"].isin(codes_t))]
+    flux_d = flux_d[(flux_d["Actor1CountryCode"]=="BEN") | (flux_d["Actor2CountryCode"]=="BEN")].copy()
+    flux_d["Paire"] = flux_d.apply(
+        lambda r: " ↔ ".join(sorted([code_pays.get(r["Actor1CountryCode"], r["Actor1CountryCode"]),
+                                      code_pays.get(r["Actor2CountryCode"], r["Actor2CountryCode"])])), axis=1)
+    diplo = flux_d.groupby("Paire").agg(articles=("NumArticles","sum"), tone=("AvgTone","mean")).reset_index()
+    diplo = diplo.sort_values("articles", ascending=False).head(10)
+    fig_diplo = px.bar(diplo, x="articles", y="Paire", orientation="h",
+                       color="tone", color_continuous_scale="RdYlGn",
+                       title="Top relations diplomatiques du Bénin (hors francophonie)")
+    fig_diplo.update_layout(template=TEMPLATE, height=400)
+    st.plotly_chart(fig_diplo, use_container_width=True)
 
-elif galerie == "Emergence Touristique":
+# ──────────────────────────────────────────────
+# DIGITAL & TOURISME
+# ──────────────────────────────────────────────
+elif galerie == "Digital & Tourisme":
+    st.title("🚀 Digital, Tourisme & Attractivité")
 
-    st.title("Galerie 3 : Emergence Touristique & Valorisation du Patrimoine")
-    st.markdown(
-        "Analyse de l'attractivité touristique et culturelle du Bénin : Ouidah, Ganvié, "
-        "Abomey, Pendjari. Comment le Bénin est-il perçu comme destination internationale ?"
-    )
+    # Digital
+    st.markdown("### Rayonnement Digital")
+    kw_digital = ['digital','technology','tech','innovation','semecity','semè city',
+                   'e-service','internet','startup','fintech','cyber','smart city',
+                   'numérique','informatique','transformation digitale']
+    import re
+    pat_digital = re.compile('|'.join(kw_digital), flags=re.IGNORECASE)
+    mask = df_f["SOURCEURL"].str.contains(pat_digital, na=False) | df_f["Actor1Name"].str.contains(pat_digital, na=False)
+    df_digital = df_f[mask].copy()
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Articles digital", f"{len(df_digital):,}")
+    if len(df_digital) > 0:
+        c2.metric("AvgTone digital", f"{df_digital['AvgTone'].mean():.2f}")
+        c3.metric("Indice Confiance Tech", f"{df_digital['AvgTone'].mean():.2f}")
+        df_digital["mois_d"] = df_digital["date"].dt.to_period("M").astype(str)
+        trend = df_digital.groupby("mois_d")["GLOBALEVENTID"].nunique().reset_index()
+        trend.columns = ["mois", "nombre"]
+        fig_dig = px.line(trend, x="mois", y="nombre", markers=True,
+                          title="Évolution du digital au Bénin")
+        fig_dig.update_layout(template=TEMPLATE, height=380)
+        st.plotly_chart(fig_dig, use_container_width=True)
+    else:
+        st.info("Pas assez de données filtrées pour le digital.")
 
-    # Mots-clés et sites touristiques
-    sites_cles = ["OUIDAH", "GANVIE", "ABOMEY", "PENDJARI", "COTONOU"]
-    mots_tourisme = ["TOURISM", "TRAVEL", "HERITAGE", "CULTURE", "MUSEUM",
-                     "PATRIMOINE", "PARC", "NATURE"] + sites_cles
-    pattern_tourisme = "|".join(mots_tourisme)
-
-    masque_tourisme = (
-        df_filtre["SOURCEURL"].astype(str).str.upper().str.contains(pattern_tourisme, na=False) |
-        df_filtre["ActionGeo_FullName"].astype(str).str.upper().str.contains("|".join(sites_cles), na=False)
-    )
-    df_tour = df_filtre[masque_tourisme].copy()
-
-    # KPIs
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        carte_kpi("Articles Tourisme", f"{len(df_tour):,}", "filtre : TOURISM, HERITAGE, sites clés")
-    with col2:
-        if len(df_tour) > 0:
-            ton_tour = df_tour["AvgTone"].mean()
-            signe = "+" if ton_tour > 0 else ""
-            carte_kpi("Baromètre d'Attractivité", f"{signe}{ton_tour:.2f}",
-                       "tonalité moyenne (>0 = positif)")
+    # Tourisme
+    st.markdown("### Émergence Touristique")
+    kw_tourism = ['tourism','tourisme','travel','voyage','ouidah','pendjari',
+                   'park','par national','heritage','patrimoine','unesco',
+                   'culture','festival','beach','plage','destination','hotel']
+    pat_tourism = re.compile('|'.join(kw_tourism), flags=re.IGNORECASE)
+    mask_t = df_f["SOURCEURL"].str.contains(pat_tourism, na=False) | df_f["Actor1Name"].str.contains(pat_tourism, na=False)
+    df_tourism = df_f[mask_t].copy()
+    c1, c2 = st.columns(2)
+    c1.metric("Articles tourisme", f"{len(df_tourism):,}")
+    if len(df_tourism) > 0:
+        barometre = df_tourism["AvgTone"].mean()
+        c2.metric("Baromètre Attractivité", f"{barometre:.2f}")
+        tour_geo = df_tourism.dropna(subset=["ActionGeo_Lat","ActionGeo_Long"])
+        if len(tour_geo) > 0:
+            fig_map = px.scatter_mapbox(tour_geo, lat="ActionGeo_Lat", lon="ActionGeo_Long",
+                                       color="AvgTone", size="NumArticles",
+                                       hover_data=["ActionGeo_FullName","SOURCEURL"],
+                                       color_continuous_scale="RdYlGn",
+                                       zoom=5, center={"lat":9.5,"lon":2.3},
+                                       title="Carte des mentions touristiques au Bénin")
+            fig_map.update_layout(mapbox_style="carto-positron", height=500, template=TEMPLATE)
+            st.plotly_chart(fig_map, use_container_width=True)
         else:
-            carte_kpi("Baromètre d'Attractivité", "N/A", "")
-    with col3:
-        pct_tour = (len(df_tour) / len(df_filtre) * 100) if len(df_filtre) > 0 else 0
-        carte_kpi("Part de voix Tourisme", f"{pct_tour:.1f}%", "du volume total")
+            st.info("Aucune donnée géolocalisée pour le tourisme.")
+    else:
+        st.info("Aucun article touristique détecté.")
 
-    st.markdown("---")
+# ──────────────────────────────────────────────
+# CYBER-VIGILANCE
+# ──────────────────────────────────────────────
+elif galerie == "Cyber-Vigilance":
+    st.title("🛡️ Cyber-Vigilance & Désinformation")
 
-    col_g, col_d = st.columns([2, 1])
+    kw_cyber = ['désinformation','fake news','cybersécurité','cyberattack','deepfake',
+                 'hacker','propaganda','misinformation','rumeur','menace','attaque',
+                 'fraud','arnaque','bot']
+    pat_cyber = re.compile('|'.join(kw_cyber), flags=re.IGNORECASE)
+    mask_c = df_f["SOURCEURL"].str.contains(pat_cyber, na=False)
+    df_cyber = df_f[mask_c].copy()
 
-    with col_g:
-        st.markdown('<p class="section-title">Carte des événements géolocalisés au Bénin</p>',
-                    unsafe_allow_html=True)
-        st.caption("Taille = volume d'événements | Couleur = tonalité (vert positif, rouge négatif)")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Articles cyber", f"{len(df_cyber):,}")
+    if len(df_cyber) > 0:
+        c2.metric("AvgTone cyber", f"{df_cyber['AvgTone'].mean():.2f}")
+        c3.metric("Sources distinctes", f"{df_cyber['domain'].nunique()}")
 
-        df_geo = df_filtre.dropna(subset=["ActionGeo_Lat", "ActionGeo_Long"]).copy()
+        df_cyber["mois_c"] = df_cyber["date"].dt.to_period("M").astype(str)
+        cyber_trend = df_cyber.groupby("mois_c").agg(
+            events=("GLOBALEVENTID","nunique"),
+            avg_tone=("AvgTone","mean"),
+        ).reset_index()
 
-        df_geo["GoldsteinScale"] = pd.to_numeric(
-            df_geo["GoldsteinScale"], errors="coerce"
-        )
-        df_geo["NumMentions"] = pd.to_numeric(
-            df_geo.get("NumMentions", 1), errors="coerce"
-        ).fillna(1)
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                            subplot_titles=("Volume d'articles cyber", "Tonalité moyenne"))
+        fig.add_trace(go.Bar(x=cyber_trend["mois_c"], y=cyber_trend["events"],
+                              name="Articles", marker_color="crimson"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=cyber_trend["mois_c"], y=cyber_trend["avg_tone"],
+                                 mode="lines+markers", name="AvgTone", line=dict(color="darkred")), row=2, col=1)
+        fig.update_layout(title="Radar de Cyber-Vigilance", template=TEMPLATE, height=550, showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
 
-        if len(df_geo) > 0:
-            # Agrégation par lieu
-            df_lieux = df_geo.groupby("ActionGeo_FullName").agg(
-                lat=("ActionGeo_Lat", "first"),
-                lon=("ActionGeo_Long", "first"),
-                nb_events=("ActionGeo_FullName", "count"),
-                ton_moyen=("AvgTone", "mean"),
-                goldstein=("GoldsteinScale", "mean"),
-                nb_mentions=("NumMentions", "sum"),
+        # Pics négatifs
+        st.markdown("### Signaux de risque réputationnel")
+        neg_thresh = df_f["AvgTone"].quantile(0.10)
+        df_neg = df_f[df_f["AvgTone"] <= neg_thresh]
+        st.metric("Seuil négatif (10e percentile)", f"{neg_thresh:.2f}")
+        st.metric("Événements sous le seuil", f"{len(df_neg):,}")
+
+        if len(df_neg) > 0:
+            neg_m = df_neg.groupby("mois").agg(
+                count=("GLOBALEVENTID","nunique"), avg_tone=("AvgTone","mean")
             ).reset_index()
-
-            # Filtrer les lieux avec au moins 2 événements
-            df_lieux = df_lieux[df_lieux["nb_events"] >= 2].copy()
-
-            # Hover enrichi
-            df_lieux["hover"] = df_lieux.apply(
-                lambda r: f"<b>{r['ActionGeo_FullName']}</b><br>"
-                        f"Événements : {r['nb_events']}<br>"
-                        f"Ton moyen : {r['ton_moyen']:.2f}<br>"
-                        f"Goldstein : {r['goldstein']:.2f}<br>"
-                        f"Mentions : {r['nb_mentions']:,.0f}",
-                axis=1
-            )
-
-            fig_carte = go.Figure()
-
-            # Points négatifs
-            neg = df_lieux[df_lieux["ton_moyen"] < 0]
-            fig_carte.add_trace(go.Scattermapbox(
-                lat=neg["lat"],
-                lon=neg["lon"],
-                mode="markers",
-                marker=dict(
-                    size=np.sqrt(neg["nb_events"]) * 5 + 6,
-                    color="#E24B4A",
-                    opacity=0.75,
-                    sizemode="area",
-                ),
-                text=neg["hover"],
-                hovertemplate="%{text}<extra></extra>",
-                name="Ton négatif",
-            ))
-
-            # Points positifs
-            pos = df_lieux[df_lieux["ton_moyen"] >= 0]
-            fig_carte.add_trace(go.Scattermapbox(
-                lat=pos["lat"],
-                lon=pos["lon"],
-                mode="markers",
-                marker=dict(
-                    size=np.sqrt(pos["nb_events"]) * 5 + 6,
-                    color="#1D9E75",
-                    opacity=0.75,
-                    sizemode="area",
-                ),
-                text=pos["hover"],
-                hovertemplate="%{text}<extra></extra>",
-                name="Ton positif",
-            ))
-
-            fig_carte.update_layout(
-                mapbox=dict(
-                    style="carto-positron",
-                    center=dict(lat=9.3, lon=2.3),
-                    zoom=6,
-                ),
-                legend=dict(
-                    orientation="h",
-                    y=0.01,
-                    x=0.5,
-                    xanchor="center",
-                    bgcolor="rgba(255,255,255,0.85)",
-                    borderwidth=0,
-                ),
-                margin=dict(r=0, t=80, l=0, b=0),
-                height=650,
-            )
-
-            st.plotly_chart(fig_carte, use_container_width=True)
-
-        else:
-            st.info("Pas de données géolocalisées disponibles sur cette période.")
-
-    with col_d:
-        st.markdown('<p class="section-title">Part de voix : Tourisme Culturel vs Nature</p>',
-                    unsafe_allow_html=True)
-
-        culture_count = df_filtre["SOURCEURL"].astype(str).str.upper().str.contains(
-            "CULTURE|HERITAGE|MUSEUM|ABOMEY|OUIDAH|PATRIMOINE", na=False
-        ).sum()
-        nature_count = df_filtre["SOURCEURL"].astype(str).str.upper().str.contains(
-            "NATURE|PENDJARI|PARC|WILDLIFE|ECOTOURISM", na=False
-        ).sum()
-        autre_count  = max(0, len(df_tour) - culture_count - nature_count)
-
-        labels = ["Tourisme Culturel", "Tourisme Nature", "Autre Tourisme"]
-        values = [culture_count, nature_count, autre_count]
-        couleurs = ["#1a5276", "#1D9E75", "#c0c0c0"]
-
-        if sum(values) > 0:
-            fig_pie = go.Figure(go.Pie(
-                labels=labels,
-                values=values,
-                hole=0.4,
-                marker=dict(colors=couleurs),
-                textinfo="percent+label",
-                insidetextorientation="radial",
-            ))
-            fig_pie.update_layout(
-                showlegend=False,
-                margin=dict(t=10, b=10, l=10, r=10),
-                height=320,
-            )
-            st.plotly_chart(fig_pie, use_container_width=True)
-        else:
-            st.info("Pas de données suffisantes pour ce graphique.")
-
-        # Mentions par site
-        st.markdown('<p class="section-title">Mentions par site emblématique</p>',
-                    unsafe_allow_html=True)
-        mentions_sites = {}
-        for site in sites_cles:
-            n = df_filtre["ActionGeo_FullName"].astype(str).str.upper().str.contains(site, na=False).sum()
-            n += df_filtre["SOURCEURL"].astype(str).str.upper().str.contains(site, na=False).sum()
-            if n > 0:
-                mentions_sites[site.capitalize()] = n
-        if mentions_sites:
-            df_sites = pd.DataFrame(list(mentions_sites.items()), columns=["Site", "Mentions"])
-            fig_sites = px.bar(df_sites, x="Site", y="Mentions",
-                               template=TEMPLATE_PLOTLY,
-                               color_discrete_sequence=[COULEUR_PRINCIPALE])
-            fig_sites.update_layout(xaxis_title="", yaxis_title="Mentions")
-            st.plotly_chart(fig_sites, use_container_width=True)
-
-# GALERIE 4 : DIPLOMATIE ACTIVE & OUVERTURE INTERNATIONALE
-elif galerie == "Diplomatie Active":
-
-    st.title("Galerie 4 : Diplomatie Active & Ouverture Internationale")
-    st.markdown(
-        "Le Bénin multiplie ses partenariats au-delà de la sphère francophone. "
-        "Cette galerie analyse les interactions diplomatiques avec les USA, la Chine, le Nigeria et les Émirats."
-    )
-
-    # Pays partenaires ciblés
-    pays_cibles = {
-        "USA":  "États-Unis",
-        "CHN":  "Chine",
-        "NGA":  "Nigeria",
-        "ARE":  "Émirats Arabes Unis",
-        "DEU":  "Allemagne",
-        "GBR":  "Royaume-Uni",
-    }
-    codes_diplo = ["03", "04", "05"]
-
-    df["EventCode_str"] = df["EventCode"].astype(str).str.zfill(2)
-
-    # Filtre diplomatie
-    masque_diplo = (
-        (
-            (df_filtre["Actor1CountryCode"] == "BEN") &
-            (df_filtre["Actor2CountryCode"].isin(pays_cibles.keys()))
-        ) | (
-            (df_filtre["Actor2CountryCode"] == "BEN") &
-            (df_filtre["Actor1CountryCode"].isin(pays_cibles.keys()))
-        )
-    )
-    df_diplo = df_filtre[masque_diplo].copy()
-
-    # Si filtre strict donne peu de résultats, on élargit avec les URL
-    if len(df_diplo) < 50:
-        mots_diplo = ["USA", "CHINA", "CHINE", "NIGERIA", "EMIRATES", "GERMAN",
-                      "COOPERATION", "COOPÉRATION", "ACCORD", "DIPLOMATIC"]
-        pattern_d  = "|".join(mots_diplo)
-        df_diplo   = df_filtre[
-            df_filtre["SOURCEURL"].astype(str).str.upper().str.contains(pattern_d, na=False)
-        ].copy()
-
-    # KPIs
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        carte_kpi("Articles diplomatiques", f"{len(df_diplo):,}", "interactions Bénin / partenaires")
-    with col2:
-        if len(df_diplo) > 0:
-            ton_d = df_diplo["AvgTone"].mean()
-            signe = "+" if ton_d > 0 else ""
-            carte_kpi("Rayonnement Diplomatique", f"{signe}{ton_d:.2f}",
-                       "tonalité moyenne hors-francophonie")
-        else:
-            carte_kpi("Rayonnement Diplomatique", "N/A", "")
-    with col3:
-        nb_pays_partenaires = df_filtre["Actor2CountryCode"].nunique()
-        carte_kpi("Pays partenaires détectés", f"{nb_pays_partenaires:,}", "codes pays distincts (Actor2)")
-
-    st.markdown("---")
-
-    col_g, col_d = st.columns([2, 1])
-
-    with col_g:
-        st.markdown('<p class="section-title">Flux diplomatiques — Sankey (Bénin vers partenaires)</p>',
-                    unsafe_allow_html=True)
-
-        # Construction du Sankey
-        liens = []
-        for code, nom_pays in pays_cibles.items():
-            masque_p = (
-                ((df_filtre["Actor1CountryCode"] == "BEN") & (df_filtre["Actor2CountryCode"] == code)) |
-                ((df_filtre["Actor2CountryCode"] == "BEN") & (df_filtre["Actor1CountryCode"] == code))
-            )
-            volume = masque_p.sum()
-            if volume > 0:
-                liens.append({"Source": "Bénin", "Target": nom_pays, "Volume": volume})
-
-        if liens:
-            df_liens = pd.DataFrame(liens)
-            tous_noeuds = ["Bénin"] + list(df_liens["Target"].unique())
-            noeud_idx   = {n: i for i, n in enumerate(tous_noeuds)}
-
-            fig_sankey = go.Figure(go.Sankey(
-                node=dict(
-                    pad=15,
-                    thickness=20,
-                    line=dict(color="black", width=0.5),
-                    label=tous_noeuds,
-                    color=[COULEUR_PRINCIPALE] + [COULEUR_POSITIVE] * (len(tous_noeuds) - 1),
-                ),
-                link=dict(
-                    source=[noeud_idx[r["Source"]] for _, r in df_liens.iterrows()],
-                    target=[noeud_idx[r["Target"]] for _, r in df_liens.iterrows()],
-                    value=df_liens["Volume"].tolist(),
-                    color="rgba(26, 82, 118, 0.3)",
-                ),
-            ))
-            fig_sankey.update_layout(height=380, margin=dict(t=20, b=20))
-            st.plotly_chart(fig_sankey, use_container_width=True)
-        else:
-            st.info("Pas assez de données pour construire le Sankey sur cette période. Essayez une période plus longue.")
-
-    with col_d:
-        st.markdown('<p class="section-title">Langues des sources médiatiques</p>',
-                    unsafe_allow_html=True)
-        st.caption("Estimation par domaine de l'URL (.fr, .en, .cn...)")
-
-        def detecter_langue(url: str) -> str:
-            url = str(url).lower()
-            if ".fr" in url or "france" in url or "lemonde" in url or "lefigaro" in url:
-                return "Français"
-            elif ".cn" in url or "xinhua" in url or "china" in url or "beijing" in url:
-                return "Chinois"
-            elif ".ng" in url or "nigeria" in url or "naija" in url:
-                return "Anglais (Nigeria)"
-            elif ".de" in url or "deutsch" in url:
-                return "Allemand"
-            elif ".pt" in url or "brasil" in url:
-                return "Portugais"
-            else:
-                return "Anglais"
-
-        if len(df_diplo) > 0:
-            df_diplo["Langue"] = df_diplo["SOURCEURL"].apply(detecter_langue)
-            lang_counts = df_diplo["Langue"].value_counts().reset_index()
-            lang_counts.columns = ["Langue", "Articles"]
-            fig_lang = go.Figure(go.Pie(
-                labels=lang_counts["Langue"],
-                values=lang_counts["Articles"],
-                hole=0.35,
-                marker=dict(colors=px.colors.qualitative.Set2),
-                textinfo="percent+label",
-            ))
-            fig_lang.update_layout(showlegend=False, margin=dict(t=10, b=10), height=320)
-            st.plotly_chart(fig_lang, use_container_width=True)
-        else:
-            st.info("Pas de données disponibles.")
-
-    # Tableau des interactions par pays
-    st.markdown("---")
-    st.markdown('<p class="section-title">Volume d\'interactions par pays partenaire</p>',
-                unsafe_allow_html=True)
-    if liens:
-        df_liens_sorted = df_liens.sort_values("Volume", ascending=False)
-        fig_bar_diplo = px.bar(
-            df_liens_sorted,
-            x="Target",
-            y="Volume",
-            template=TEMPLATE_PLOTLY,
-            color_discrete_sequence=[COULEUR_PRINCIPALE],
-            labels={"Target": "Pays partenaire", "Volume": "Nombre d'articles"},
-        )
-        st.plotly_chart(fig_bar_diplo, use_container_width=True)
-
-
-# GALERIE 5 : CYBER-VIGILANCE & DÉSINFORMATION
-
-elif galerie == "Cyber-Vigilance & Désinformation":
-
-    st.title("Galerie 5 : Cyber-Vigilance & Lutte contre la Désinformation")
-    st.markdown(
-        "Outil d'alerte précoce pour détecter des campagnes d'influence ou des pics anormaux "
-        "de couverture négative. A destination du CNIN (Centre National de l'Intelligence Nationale)."
-    )
-
-    # KPIs de vigilance
-    col1, col2, col3, col4 = st.columns(4)
-
-    # Calcul du pic de volume
-    par_jour = df_filtre.groupby(df_filtre["date"].dt.date).size()
-    pic      = par_jour.max() if len(par_jour) > 0 else 0
-    moy_jour = par_jour.mean() if len(par_jour) > 0 else 0
-
-    with col1:
-        carte_kpi("Pic quotidien détecté", f"{pic:,}",
-                   f"articles en un seul jour (moy. {moy_jour:.0f}/jour)")
-    with col2:
-        pct_negatif = (df_filtre["ton_label"] == "Negatif").mean() * 100
-        carte_kpi("Part d'articles négatifs", f"{pct_negatif:.1f}%", "ton < -1 (AvgTone)")
-    with col3:
-        pct_positif = (df_filtre["ton_label"] == "Positif").mean() * 100
-        carte_kpi("Part d'articles positifs", f"{pct_positif:.1f}%", "ton > +1 (AvgTone)")
-    with col4:
-        if "GoldsteinScale" in df_filtre.columns:
-            goldstein_moy = pd.to_numeric(df_filtre["GoldsteinScale"], errors="coerce").mean()
-            signe = "+" if goldstein_moy > 0 else ""
-            carte_kpi("Indice de Stabilité", f"{signe}{goldstein_moy:.2f}",
-                       "GoldsteinScale (>0 = stabilisant)")
-        else:
-            carte_kpi("Indice de Stabilité", "N/A", "")
-
-    st.markdown("---")
-
-    # Détection de pics anormaux
-    col_g, col_d = st.columns([2, 1])
-
-    with col_g:
-        st.markdown('<p class="section-title">Volume quotidien — Détection de pics anormaux</p>',
-                    unsafe_allow_html=True)
-        st.caption("Les points en rouge dépassent 2 fois l'écart-type de la moyenne (signal d'alerte).")
-
-        par_jour_df = par_jour.reset_index()
-        par_jour_df.columns = ["Date", "Articles"]
-        par_jour_df["Date"] = pd.to_datetime(par_jour_df["Date"])
-        seuil = par_jour_df["Articles"].mean() + 2 * par_jour_df["Articles"].std()
-        par_jour_df["Alerte"] = par_jour_df["Articles"] > seuil
-
-        fig_vigilance = go.Figure()
-        fig_vigilance.add_trace(go.Scatter(
-            x=par_jour_df["Date"], y=par_jour_df["Articles"],
-            mode="lines", name="Volume quotidien",
-            line=dict(color=COULEUR_PRINCIPALE, width=1.5),
-        ))
-        # Points en alerte
-        alertes = par_jour_df[par_jour_df["Alerte"]]
-        fig_vigilance.add_trace(go.Scatter(
-            x=alertes["Date"], y=alertes["Articles"],
-            mode="markers", name="Pic anormal",
-            marker=dict(color=COULEUR_NEGATIVE, size=10, symbol="circle"),
-        ))
-        fig_vigilance.add_hline(
-            y=seuil,
-            line_dash="dash",
-            line_color="orange",
-            annotation_text=f"Seuil d'alerte ({seuil:.0f})",
-            annotation_position="top right",
-        )
-        fig_vigilance.update_layout(
-            template=TEMPLATE_PLOTLY,
-            xaxis_title="Date",
-            yaxis_title="Nombre d'articles",
-            hovermode="x unified",
-            legend=dict(orientation="h", y=1.1),
-        )
-        st.plotly_chart(fig_vigilance, use_container_width=True)
-
-    with col_d:
-        st.markdown('<p class="section-title">Evolution de la tonalité moyenne (mensuelle)</p>',
-                    unsafe_allow_html=True)
-        ton_mensuel = df_filtre.groupby("mois")["AvgTone"].mean().reset_index()
-        ton_mensuel.columns = ["Mois", "Tonalité"]
-        fig_ton = px.bar(
-            ton_mensuel,
-            x="Mois",
-            y="Tonalité",
-            template=TEMPLATE_PLOTLY,
-            color="Tonalité",
-            color_continuous_scale=["#E24B4A", "#f5f5f5", "#1D9E75"],
-            color_continuous_midpoint=0,
-            labels={"Tonalité": "Ton moyen (AvgTone)"},
-        )
-        fig_ton.update_layout(
-            xaxis_tickangle=-45,
-            coloraxis_showscale=False,
-            showlegend=False,
-        )
-        st.plotly_chart(fig_ton, use_container_width=True)
-
-    st.markdown("---")
-
-    # Tableau des sources suspectes (domaines les plus actifs pendant les pics)
-    st.markdown('<p class="section-title">Analyse des sources les plus actives</p>',
-                unsafe_allow_html=True)
-    st.caption(
-        "Extraction des domaines sources (proxy de traçabilité). "
-        "Un volume anormalement élevé d'un domaine inconnu peut indiquer une source coordinée."
-    )
-
-    def extraire_domaine(url: str) -> str:
-        try:
-            parts = str(url).split("/")
-            return parts[2] if len(parts) > 2 else str(url)
-        except Exception:
-            return "inconnu"
-
-    if "SOURCEURL" in df_filtre.columns:
-        df_sources = df_filtre.copy()
-        df_sources["domaine"] = df_sources["SOURCEURL"].apply(extraire_domaine)
-        top_sources = df_sources["domaine"].value_counts().head(20).reset_index()
-        top_sources.columns = ["Domaine", "Nombre d'articles"]
-
-        fig_sources = px.bar(
-            top_sources,
-            x="Nombre d'articles",
-            y="Domaine",
-            orientation="h",
-            template=TEMPLATE_PLOTLY,
-            color="Nombre d'articles",
-            color_continuous_scale="Blues",
-        )
-        fig_sources.update_layout(
-            yaxis={"categoryorder": "total ascending"},
-            yaxis_title="",
-            coloraxis_showscale=False,
-        )
-        st.plotly_chart(fig_sources, use_container_width=True)
-
-    # Box plot tonalité positif vs négatif
-    st.markdown('<p class="section-title">Distribution de la tonalité par catégorie</p>',
-                unsafe_allow_html=True)
-    df_box = df_filtre[df_filtre["ton_label"].isin(["Positif", "Negatif"])].copy()
-    if len(df_box) > 0:
-        fig_box = px.box(
-            df_box,
-            x="ton_label",
-            y="AvgTone",
-            color="ton_label",
-            template=TEMPLATE_PLOTLY,
-            color_discrete_map={"Positif": COULEUR_POSITIVE, "Negatif": COULEUR_NEGATIVE},
-            labels={"ton_label": "Catégorie", "AvgTone": "Score de tonalité"},
-        )
-        fig_box.update_layout(showlegend=False)
-        st.plotly_chart(fig_box, use_container_width=True)
-
-
-# GALERIE 6 : MODELES ML & NLP
-elif galerie == "Modèles ML & NLP":
-
-    st.title("Galerie 6 : Modèles Machine Learning & NLP")
-    st.markdown(
-        "Cette galerie intègre les modèles avancés d'analyse de texte développés sur les articles scrapés : "
-        "**analyse de sentiment** (BERT multilingue) et **topic modeling** (BERTopic). "
-        "Les résultats enrichissent l'analyse exploratoire avec des insights issus du contenu textuel des articles."
-    )
-
-    # Chargement des données ML avec fallback GitHub
-    SENTIMENT_URL = (
-        "https://raw.githubusercontent.com/GuerindaG/"
-        "equipe6_benin_insight_challenge_2026/main/models/outputs/sentiment_dl.csv"
-    )
-    ARTICLES_URL = (
-        "https://raw.githubusercontent.com/GuerindaG/"
-        "equipe6_benin_insight_challenge_2026/main/models/outputs/scraped_articles.csv"
-    )
-
-    @st.cache_data(show_spinner="Chargement des résultats ML...")
-    def charger_sentiment(url: str) -> pd.DataFrame:
-        df_sent = pd.read_csv(url, parse_dates=["date"])
-        return df_sent
-
-    @st.cache_data(show_spinner="Chargement des articles scrapés...")
-    def charger_articles(url: str) -> pd.DataFrame:
-        df_art = pd.read_csv(url)
-        df_art = df_art.dropna(subset=["text"])
-        df_art = df_art[df_art["text"].str.strip() != ""]
-        df_art["date_datetime"] = pd.to_datetime(df_art["SQLDATE"], errors="coerce")
-        return df_art
-
-    # Essayer local puis fallback GitHub
-    # Chargement des resultats de sentiment par article
-    SENTIMENT_ARTICLES_URL = (
-        "https://raw.githubusercontent.com/GuerindaG/"
-        "equipe6_benin_insight_challenge_2026/main/models/outputs/sentiment_articles.csv"
-    )
-    
-    @st.cache_data(show_spinner="Chargement des sentiments par article...")
-    def charger_sentiment_articles(url: str) -> pd.DataFrame:
-        df_sa = pd.read_csv(url, parse_dates=["date"])
-        return df_sa
-    
-    try:
-        df_sentiment = charger_sentiment("../models/outputs/sentiment_dl.csv")
-        source_sent = "local"
-    except Exception:
-        try:
-            df_sentiment = charger_sentiment(SENTIMENT_URL)
-            source_sent = "GitHub"
-        except Exception:
-            df_sentiment = pd.DataFrame()
-            source_sent = "indisponible"
-    
-    try:
-        df_sent_articles = charger_sentiment_articles("../models/outputs/sentiment_articles.csv")
-        source_sent_art = "local"
-    except Exception:
-        try:
-            df_sent_articles = charger_sentiment_articles(SENTIMENT_ARTICLES_URL)
-            source_sent_art = "GitHub"
-        except Exception:
-            df_sent_articles = pd.DataFrame()
-            source_sent_art = "indisponible"
-
-    try:
-        df_articles = charger_articles("../models/outputs/scraped_articles.csv")
-        source_art = "local"
-    except Exception:
-        try:
-            df_articles = charger_articles(ARTICLES_URL)
-            source_art = "GitHub"
-        except Exception:
-            df_articles = pd.DataFrame()
-            source_art = "indisponible"
-
-    st.caption(f"Sources chargées : sentiment = {source_sent}, articles = {source_art}")
-
-    # -- SECTION 6.1 : SENTIMENT BERT --
-    if len(df_sentiment) > 0:
-        st.markdown("---")
-        st.markdown('<p class="section-title">Evolution du sentiment mediatique (BERT multilingue)</p>',
-                    unsafe_allow_html=True)
-
-        col_g, col_d = st.columns([2, 1])
-
-        with col_g:
-            fig_sent = make_subplots(rows=2, cols=1, shared_xaxes=True,
-                                     subplot_titles=("Nombre d'événements par jour", "Sentiment moyen"))
-            fig_sent.add_trace(go.Scatter(
-                x=df_sentiment["date"], y=df_sentiment["event_count"],
-                mode="lines", name="Événements", line=dict(color="steelblue")
-            ), row=1, col=1)
-            fig_sent.add_trace(go.Scatter(
-                x=df_sentiment["date"], y=df_sentiment["sentiment_mean"],
-                mode="lines", name="Sentiment", line=dict(color="crimson")
-            ), row=2, col=1)
-            fig_sent.add_hline(y=0, line_dash="dash", line_color="grey", row=2, col=1)
-            fig_sent.update_layout(
-                title="Evolution du sentiment mediatique - periode 2025 (BERT multilingue)",
-                template=TEMPLATE_PLOTLY, height=600
-            )
-            st.plotly_chart(fig_sent, use_container_width=True)
-
-            st.info(
-                "**Interpretation** : La série temporelle croise volume et opinion pour chaque jour analysé. "
-                "Un pic de volume sans changement de sentiment suggère une couverture factuelle neutre ; "
-                "un pic avec sentiment négatif est à investiguer. La ligne de référence à zéro permet "
-                "de visualiser rapidement les jours à tonalité favorable ou défavorable."
-            )
-
-        with col_d:
-            st.markdown('<p class="section-title">Repartition globale des sentiments</p>',
-                        unsafe_allow_html=True)
-
-            pct_pos = df_sentiment["pct_positif"].mean() * 100
-            pct_neg = df_sentiment["pct_negatif"].mean() * 100
-            pct_neu = 100 - pct_pos - pct_neg
-
-            fig_pie = go.Figure()
-            fig_pie.add_trace(go.Bar(
-                x=["Positif", "Neutre", "Négatif"],
-                y=[pct_pos, pct_neu, pct_neg],
-                marker_color=["seagreen", "lightgrey", "crimson"]
-            ))
-            fig_pie.update_layout(
-                title="Repartition moyenne des sentiments (BERT)",
-                template=TEMPLATE_PLOTLY,
-                yaxis_title="Pourcentage",
-                showlegend=False,
-            )
-            st.plotly_chart(fig_pie, use_container_width=True)
-
-            st.info(
-                "**Interpretation** : La répartition globale donne un aperçu de la perception sur "
-                "l'ensemble de la période. Une majorité de neutre est typique des données journalistiques ; "
-                "un excès de négatif est un indicateur de crise ou de biais médiatique."
-            )
-
-        # -- SECTION 6.2 : JOUR SPECIFIQUE --
-        st.markdown("---")
-        st.markdown('''<p class="section-title">Analyse du sentiment d'un jour specifique</p>''',
-                    unsafe_allow_html=True)
-
-        # Date picker for ML sentiment
-        if len(df_sentiment) > 0:
-            sent_min = df_sentiment["date"].min().date()
-            sent_max = df_sentiment["date"].max().date()
-        else:
-            sent_min = date_min
-            sent_max = date_max
-
-        date_cible = st.date_input(
-            "Selectionner une date a analyser (periode BERT disponible)",
-            value=sent_max,
-            min_value=sent_min,
-            max_value=sent_max,
-            key="date_ml"
-        )
-
-        col1, col2, col3 = st.columns(3)
-
-        jour_bert = df_sentiment[df_sentiment["date"].dt.date == date_cible]
-        if len(jour_bert) > 0:
-            row = jour_bert.iloc[0]
-            with col1:
-                carte_kpi("Événements", f"{row['event_count']:.0f}", f"{date_cible}")
-            with col2:
-                carte_kpi("Sentiment BERT", f"{row['sentiment_mean']:.3f}", "moyenne journaliere")
-            with col3:
-                signe_pos = f"{row['pct_positif']*100:.1f}%"
-                signe_neg = f"{row['pct_negatif']*100:.1f}%"
-                carte_kpi("Positif / Négatif", f"{signe_pos} / {signe_neg}", "distribution")
-
-            st.success(
-                f"Le {date_cible} présente un sentiment **"
-                f"{'Positif' if row['sentiment_mean'] >= 0.3 else ('Negatif' if row['sentiment_mean'] <= -0.3 else 'Neutre')}** "
-                f"(comparé à la moyenne globale = {df_sentiment['sentiment_mean'].mean():.3f})."
-            )
-        else:
-            # Fallback sur GDELT natif
-            df["date_str"] = df["SQLDATE"].dt.strftime("%Y-%m-%d")
-            jour_gdelt = df[df["date_str"] == str(date_cible)]
-            if len(jour_gdelt) > 0:
-                with col1:
-                    carte_kpi("Événements GDELT", f"{len(jour_gdelt)}", f"{date_cible}")
-                with col2:
-                    carte_kpi("AvgTone GDELT", f"{jour_gdelt['AvgTone'].mean():.3f}", "indicateur natif")
-                with col3:
-                    carte_kpi("Goldstein", f"{jour_gdelt['GoldsteinScale'].mean():.3f}", "intensite evenement")
-                st.info(
-                    f"Pas de données BERT pour le {date_cible}. Affichage des métriques GDELT natives. "
-                    f"La période GDELT couvre du {date_min} au {date_max}."
-                )
-            else:
-                st.warning(f"Aucune donnée disponible pour le {date_cible}.")
-
-        # -- SECTION 6.3 : CORRELATION --
-        st.markdown("---")
-        st.markdown('<p class="section-title">Correlation AvgTone GDELT vs Sentiment BERT</p>',
-                    unsafe_allow_html=True)
-
-        if len(df_sentiment) > 0:
-            # Calcul de l'AvgTone moyen par jour depuis les donnees GDELT brutes
-            df["date_only"] = df["SQLDATE"].dt.date
-            avg_tone_daily = df.groupby("date_only")["AvgTone"].mean().reset_index()
-            avg_tone_daily["date_only"] = pd.to_datetime(avg_tone_daily["date_only"])
-            avg_tone_daily.columns = ["date", "avg_tone_gdelt"]
-            
-            # Fusion avec les donnees de sentiment
-            df_sent_merged = df_sentiment.merge(avg_tone_daily, on="date", how="left")
-            df_sent_merged["avg_tone"] = df_sent_merged["avg_tone_gdelt"].fillna(df_sent_merged["avg_tone"])
-            
-            # Filtrer les jours avec les deux indicateurs
-            df_corr = df_sent_merged.dropna(subset=["avg_tone", "sentiment_mean"])
-            
-            if len(df_corr) > 0:
-                corr = df_corr["avg_tone"].corr(df_corr["sentiment_mean"])
-
-                fig_corr = go.Figure()
-                fig_corr.add_trace(go.Scatter(
-                    x=df_corr["avg_tone"], y=df_corr["sentiment_mean"],
-                    mode="markers+text", text=df_corr["date"].dt.strftime("%Y-%m-%d"),
-                    textposition="top center", marker=dict(size=12, color="steelblue"),
-                    name="Jours analysés"
-                ))
-
-                # Regression line
-                import numpy as np
-                z = np.polyfit(df_corr["avg_tone"], df_corr["sentiment_mean"], 1)
-                p = np.poly1d(z)
-                x_line = np.linspace(df_corr["avg_tone"].min(), df_corr["avg_tone"].max(), 100)
-                fig_corr.add_trace(go.Scatter(
-                    x=x_line, y=p(x_line), mode="lines",
-                    name="Regression lineaire", line=dict(color="crimson", dash="dash")
-                ))
-
-                fig_corr.update_layout(
-                    title=f"Correlation AvgTone GDELT vs Sentiment BERT (r = {corr:.3f}, n={len(df_corr)} jours)",
-                    xaxis_title="AvgTone (GDELT natif)",
-                    yaxis_title="Sentiment moyen (BERT)",
-                    template=TEMPLATE_PLOTLY, height=500
-                )
-                st.plotly_chart(fig_corr, use_container_width=True)
-
-                st.info(
-                    "**Interpretation** : La corrélation entre AvgTone (GDELT natif) et sentiment BERT "
-                    "valide la cohérence des deux approches. Un coefficient proche de +1 indique que les "
-                    "deux méthodes s'accordent ; proche de 0, elles captent des dimensions différentes de la tonalité. "
-                    "Les points éloignés de la droite de régression sont des jours atypiques."
-                )
-            else:
-                st.warning("Pas assez de données communes entre GDELT et sentiment BERT pour calculer la corrélation.")
-                st.info("Assurez-vous que les dates des données sentiment et GDELT se chevauchent.")
-
-    # -- SECTION 6.4 : TOPIC MODELING --
-    if len(df_articles) > 0:
-        st.markdown("---")
-        st.markdown('<p class="section-title">Topic Modeling avec BERTopic</p>',
-                    unsafe_allow_html=True)
-
-        st.markdown(
-            f"Articles scrapés disponibles : **{len(df_articles)} documents**. "
-            "Le modèle BERTopic extrait automatiquement les thèmes dominants via des embeddings multilingues."
-        )
-
-        try:
-            from bertopic import BERTopic
-            from sklearn.feature_extraction.text import CountVectorizer
-            import nltk
-            nltk.download("stopwords", quiet=True)
-            from nltk.corpus import stopwords
-
-            stop_words = set(stopwords.words("english") + stopwords.words("french"))
-
-            def simple_preprocess(text):
-                text = str(text).lower()
-                tokens = [w for w in text.split() if w.isalpha() and w not in stop_words and len(w) > 2]
-                return " ".join(tokens)
-
-            docs = df_articles["text"].apply(simple_preprocess).tolist()
-            docs = [d for d in docs if d.strip()]
-
-            vectorizer_model = CountVectorizer(
-                ngram_range=(1, 2), stop_words=list(stop_words), min_df=5
-            )
-
-            with st.spinner("Entraînement du modèle BERTopic..."):
-                topic_model = BERTopic(
-                    embedding_model="paraphrase-multilingual-MiniLM-L12-v2",
-                    vectorizer_model=vectorizer_model,
-                    min_topic_size=10,
-                    verbose=False,
-                )
-                topics, probs = topic_model.fit_transform(docs)
-
-            topic_info = topic_model.get_topic_info()
-            topic_info_display = topic_info[topic_info["Topic"] > -1].head(10)
-
-            col_g, col_d = st.columns([2, 1])
-            with col_g:
-                fig_topics = px.bar(
-                    topic_info_display, x="Name", y="Count",
-                    title="Top 10 thèmes identifiés par BERTopic",
-                    color_discrete_sequence=[COULEUR_PRINCIPALE],
-                    template=TEMPLATE_PLOTLY,
-                )
-                fig_topics.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig_topics, use_container_width=True)
-
-            with col_d:
-                st.markdown("**Résumé des topics**")
-                st.dataframe(
-                    topic_info_display[["Topic", "Name", "Count"]],
-                    use_container_width=True,
-                    hide_index=True,
-                )
-
-            st.info(
-                "**Interpretation** : Les topics détectés par BERTopic reflètent les thèmes dominants "
-                "dans la couverture médiatique sur le Bénin. Un topic 'Autres' (-1) regroupe les articles "
-                "aberrants ou non classables. La taille du topic indique son importance relative dans le corpus."
-            )
-
-        except Exception as e:
-            st.warning(f"Le modèle BERTopic n'a pas pu être chargé : {e}")
-            st.info(
-                "Pour activer le topic modeling, installez les dépendances : "
-                "`pip install bertopic spacy` et téléchargez les modèles linguistiques."
-            )
-
+            fig_neg = px.bar(neg_m, x="mois", y="count", title="Événements les plus négatifs (bottom 10%)",
+                             color="avg_tone", color_continuous_scale="Reds")
+            fig_neg.update_layout(template=TEMPLATE, height=400)
+            st.plotly_chart(fig_neg, use_container_width=True)
     else:
-        st.warning(
-            "Les données ML (sentiment et articles) ne sont pas disponibles. "
-            "Vérifiez les chemins locaux ou la connexion à GitHub."
-        )
+        st.info("Aucun article détecté avec les mots-clés cyber-vigilance.")
 
 # PIED DE PAGE
 st.markdown("---")
 st.markdown(
     '<p style="text-align:center; color:#888; font-size:12px;">'
-    "Bénin Insight Challenge 2026 : Équipe 6 | Données : GDELT Project | "
-    "Dashboard v1.0"
-    "</p>",
-    unsafe_allow_html=True,
+    "🇧🇯 Bénin Insight Challenge 2026 — Équipe 6 | Données : GDELT Project | Dashboard v2.0"
+    "</p>", unsafe_allow_html=True
 )
