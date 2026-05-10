@@ -1,15 +1,48 @@
-# 🇧🇯 GDELT Benin Data Pipeline
+# Bénin Insights Challenge 2026  
+## Hackathon iSHEERO x DataCamp Donates
 
-## Objectif
+## Présentation du projet
 
+Dans le cadre du Hackathon **iSHEERO x DataCamp 2026**, notre équipe a développé une solution d’analyse de données basée sur **GDELT** afin de transformer des données médiatiques mondiales en insights stratégiques sur le Bénin.
 
-## Structure du dépôt
+Notre projet explore la manière dont le Bénin est représenté dans les médias internationaux au cours des **12 derniers mois**, avec un focus sur :
 
+- l’attractivité du pays ;
+- les relations diplomatiques et géopolitiques ;
+- la perception médiatique internationale ;
+- les signaux de vigilance informationnelle et stratégique.
 
+L’objectif est de produire des analyses utiles pour :
+- journalistes,
+- chercheurs,
+- décideurs publics,
+- analystes OSINT.
 
-## Extraction des données
+---
 
-Requête SQL utilisée sur BigQuery pour extraire les événements liés au Bénin en 2025 :
+## Problématique
+
+Comment exploiter les données GDELT pour :
+
+1. identifier les principaux sujets associés au Bénin ;
+2. analyser l’évolution de la couverture médiatique ;
+3. mesurer la tonalité des publications ;
+4. détecter des pics d’attention médiatique ;
+5. cartographier les relations du Bénin avec les autres pays.
+
+---
+
+## Approche méthodologique
+
+Notre workflow s’est articulé en 4 étapes principales.
+
+### 1. Extraction des données
+
+Source : **GDELT BigQuery**
+
+Nous avons interrogé les événements liés au Bénin via Google BigQuery.
+
+Filtre principal :
 
 ```sql
 SELECT *
@@ -22,110 +55,241 @@ AND (
 )
 ```
 
-**info :**
-
-Dans GDELT, le Bénin est identifié par deux codes principaux  :
-
-- FIPS Country Code : BN (Utilisé pour la géolocalisation des événements).
-
-- ISO Country Code : BJ (Utilisé pour identifier les acteurs béninois).
-
-#
-Ce pipeline permet de récupérer, nettoyer et structurer les données GDELT liées au Bénin afin de produire un dataset exploitable pour l’analyse, le dashboard et le machine learning.
+Objectif :
+- limiter le coût BigQuery ;
+- récupérer les événements sur une période fixe (janvier 2025 - Décembre 2025) .
 
 ---
 
-## Fonctionnement du pipeline
+### 2. Pipeline de traitement
 
-Le pipeline exécute 3 étapes principales :
+Le pipeline de preprocessing comprend :
 
-### 1. Extraction
+- nettoyage des colonnes inutiles ;
+- gestion des valeurs manquantes ;
+- standardisation des dates ;
+- filtrage thématique via regex ;
+- export des datasets nettoyés.
 
-Téléchargement des données GDELT sur une période définie .
-
-### 2. Nettoyage
-
-* Suppression des données invalides
-* Harmonisation des colonnes
-* Filtrage géographique et/ou acteur (selon configuration)
-
-### 3. Feature Engineering
-
-* Création de variables analytiques (tendances, indicateurs, agrégations)
-* Préparation des données pour analyse et modélisation
+Scripts : `pipeline/`
 
 ---
 
-## Installation et Lancement du pipeline
-1- Créer un projet sur Google Cloud (console.cloud.google.com)
+### 3. Analyse exploratoire
 
-2- Activer l'API BigQuery sur votre projet
+Notebook principal : `notebooks/`
 
-3- Créer un Service Account avec le rôle "Utilisateur BigQuery"
+Analyses réalisées :
 
-4- Télécharger la clé JSON et la renommer key.json
+- distribution des événements ;
+- évolution temporelle ;
+- analyse de sentiment via `AvgTone` ;
+- top pays mentionnant le Bénin ;
+- top acteurs internationaux ;
+- détection de pics médiatiques.
 
-5- Cloner le projet 
-
-6- Installer les bibliothèques : pip install -r requirements.txt
-
-7- Créer un fichier .env à la racine du projet :
-
-        GCP_PROJECT_ID=votre-project-id
-        
-        GOOGLE_APPLICATION_CREDENTIALS=./key.json
-        
-8- Placer le fichier key.json à la racine du projet
-
-9- Exécuter : python main.py
-
-## Outputs générés
-
-Le pipeline produit deux datasets :
-
-* `data/processed/benin_cleaned_data.csv`
-  → données nettoyées
-
-* `data/processed/benin_trends.csv`
-  → données enrichies pour analyse & dashboard
+Visualisations :
+- séries temporelles ;
+- histogrammes ;
+- heatmaps ;
+- bar charts ;
+- nuages de mots.
 
 ---
 
-## Logique de filtrage 
-Selon les objectifs business, le filtrage peut inclure :
+### 4. Dashboard interactif
 
-### Option 1 : Strict (localisation uniquement)
+Dashboard développé avec **Streamlit** et déployé sur **streamlit Community Cloud** 
 
-```text
-ActionGeo_CountryCode == 'BN'
+disponible via le lien suivant : https://equipe6benininsightchallenge2026.streamlit.app/ 
+
+Fonctionnalités :
+
+- filtres temporels ;
+- exploration des événements ;
+- visualisation des tendances ;
+- navigation simplifiée pour utilisateurs non techniques.
+
+Lancement :
+
+```bash
+streamlit run dashboard/dashboard_benin.py
 ```
 
-- événements se déroulant uniquement au Bénin
+---
+
+## Axes analytiques retenus
+
+### Axe 1 — Attractivité nationale
+
+Inspiré de :
+- [Open Data France](https://data.education.gouv.fr/pages/dataviz-list/)
+
+Analyse :
+- digitalisation ;
+- économie ;
+- tourisme ;
+- innovation ;
+- perception internationale.
 
 ---
 
-### Option 2
-```text
-ActionGeo_CountryCode == 'BN'
-OR Actor1CountryCode == 'BJ'
-OR Actor2CountryCode == 'BJ'
+### Axe 2 — Vigilance Cyber 
+
+Inspiré de :
+- [World Monitor](https://www.worldmonitor.app/?lat=20.0000&lon=0.0000&zoom=1.00&view=global&timeRange=7d&layers=conflicts%2Cbases%2Chotspots%2Cnuclear%2Csanctions%2Cweather%2Ceconomic%2Cwaterways%2Coutages%2Cmilitary%2Cnatural%2CiranAttacks) :
+- méthodologies de veille stratégique
+
+Analyse :
+- signaux faibles ;
+- désinformation ;
+- instabilité régionale ;
+- perception diplomatique.
+
+---
+
+## Utilisation de l’intelligence artificielle
+
+Conformément au règlement du challenge, nous déclarons l’usage d’IA dans le projet.
+
+Outil principal :
+- **Google Gemini**
+
+Utilisations :
+
+### Documentation
+Gemini nous a aidés à :
+
+- structurer et améliorer le README ;
+- clarifier la documentation technique ;
+- organiser les livrables.
+
+### Qualité du code
+Gemini a servi pour :
+
+- commenter certaines sections de code ;
+- améliorer la lisibilité des scripts ;
+- proposer des optimisations sur certaines fonctions.
+
+### Notebook
+Gemini a été utilisé pour :
+
+- améliorer les explications markdown ;
+- renforcer la narration analytique ;
+- corriger certaines visualisations.
+
+### Storytelling
+Gemini a assisté dans :
+
+- la structuration du pitch ;
+- la reformulation des insights ;
+- l’amélioration du langage non technique.
+
+**Important :**
+Toutes les décisions analytiques, validations métier et interprétations finales ont été réalisées par l’équipe.
+
+---
+
+## Structure du dépôt
+
+```bash
+.
+├── dashboard/          # Application Streamlit
+├── data/
+│   ├── raw/            # Données brutes
+│   └── processed/      # Données nettoyées
+├── docs/               # Documentation complémentaire
+├── models/             # Scripts ML / sentiment
+│   └── outputs/
+├── notebooks/          # Analyse exploratoire
+├── pipeline/           # Scripts ETL / preprocessing
+├── main.py
+├── requirements.txt
+└── README.md
 ```
 
- inclut :
+---
 
-* événements au Bénin
-* acteurs béninois à l’international
-* relations internationales
+## Installation
 
+Cloner le projet :
 
-## Remarque 
+```bash
+git clone <repo_url>
+cd project
+```
 
-Le dataset final dépend directement du choix de filtrage dans `clean_data()` :
+Installer les dépendances :
 
-* il doit être aligné avec les questions business
-* tous les membres doivent utiliser le même dataset de référence
+```bash
+pip install -r requirements.txt
+```
 
+---
 
+## Reproduction du projet
 
+### Exécuter le pipeline
 
+```bash
+python main.py
+```
 
+### Ouvrir le notebook
+
+Lancer les notebooks dans :
+
+```bash
+notebooks/
+```
+
+### Lancer le dashboard
+
+```bash
+streamlit run dashboard/app.py
+```
+
+---
+
+## Sources d’inspiration
+
+Données :
+- GDELT Project
+- Google BigQuery
+
+Technologies :
+- Pandas
+- Plotly
+- Streamlit
+- Scikit-learn
+
+---
+
+## Livrables
+
+Conformément aux exigences du challenge :
+
+- dépôt GitHub public
+- notebook reproductible
+- dashboard interactif
+- vidéo pitch
+- résumé exécutif
+
+---
+
+## Équipe
+
+**Groupe 04 – Équipe 6**
+
+- **Data Engineer** : pipeline et extraction
+- **Data Analyst** : dashboard et visualisation
+- **ML Engineer** : analyse de sentiment / modèles
+- **Data Scientist** : cadrage analytique, insights et pitch
+
+---
+
+## Notes
+
+- Projet développé dans le cadre du hackathon uniquement.
+- Données issues de GDELT.
+- Usage d’IA déclaré conformément au règlement.
