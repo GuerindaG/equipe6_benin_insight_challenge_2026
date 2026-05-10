@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import re
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from urllib.parse import urlparse
@@ -11,7 +12,7 @@ from urllib.parse import urlparse
 # ──────────────────────────────────────────────
 st.set_page_config(
     page_title="Bénin Insights Dashboard",
-    page_icon="🇧🇯",
+    page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -102,7 +103,7 @@ except Exception as e:
 # BARRE LATÉRALE
 # ──────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## 🇧🇯 Bénin Insights")
+    st.markdown("## Bénin Insights")
     st.markdown("---")
     galerie = st.radio(
         "Navigation",
@@ -126,7 +127,7 @@ with st.sidebar:
 # VUE D'ENSEMBLE
 # ──────────────────────────────────────────────
 if galerie == "Vue d'ensemble":
-    st.title("🇧🇯 Vue d'ensemble — Bénin 2025")
+    st.title("Vue d'ensemble — Bénin 2025")
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Événements", f"{len(df_f):,}")
@@ -179,7 +180,7 @@ if galerie == "Vue d'ensemble":
 # COUVERTURE MÉDIATIQUE
 # ──────────────────────────────────────────────
 elif galerie == "Couverture médiatique":
-    st.title("📊 Couverture médiatique")
+    st.title("Couverture médiatique")
 
     daily = df_f.groupby("date").agg(
         evenements=("GLOBALEVENTID", "nunique"),
@@ -225,7 +226,7 @@ elif galerie == "Couverture médiatique":
 # SENTIMENT & PERCEPTION
 # ──────────────────────────────────────────────
 elif galerie == "Sentiment & Perception":
-    st.title("💬 Sentiment & Perception")
+    st.title("Sentiment & Perception")
 
     c1, c2, c3 = st.columns(3)
     c1.metric("AvgTone moyen", f"{df_f['AvgTone'].mean():.2f}")
@@ -288,7 +289,7 @@ elif galerie == "Sentiment & Perception":
 # ACTEURS & DIPLOMATIE
 # ──────────────────────────────────────────────
 elif galerie == "Acteurs & Diplomatie":
-    st.title("🌍 Acteurs & Diplomatie")
+    st.title("Acteurs & Diplomatie")
 
     # Pays les plus mentionnés
     st.markdown("### Pays les plus mentionnés avec le Bénin")
@@ -370,14 +371,13 @@ elif galerie == "Acteurs & Diplomatie":
 # DIGITAL & TOURISME
 # ──────────────────────────────────────────────
 elif galerie == "Digital & Tourisme":
-    st.title("🚀 Digital, Tourisme & Attractivité")
+    st.title("Digital, Tourisme & Attractivité")
 
     # Digital
     st.markdown("### Rayonnement Digital")
     kw_digital = ['digital','technology','tech','innovation','semecity','semè city',
                    'e-service','internet','startup','fintech','cyber','smart city',
                    'numérique','informatique','transformation digitale']
-    import re
     pat_digital = re.compile('|'.join(kw_digital), flags=re.IGNORECASE)
     mask = df_f["SOURCEURL"].str.contains(pat_digital, na=False) | df_f["Actor1Name"].str.contains(pat_digital, na=False)
     df_digital = df_f[mask].copy()
@@ -428,7 +428,7 @@ elif galerie == "Digital & Tourisme":
 # CYBER-VIGILANCE
 # ──────────────────────────────────────────────
 elif galerie == "Cyber-Vigilance":
-    st.title("🛡️ Cyber-Vigilance & Désinformation")
+    st.title("Cyber-Vigilance & Désinformation")
 
     kw_cyber = ['désinformation','fake news','cybersécurité','cyberattack','deepfake',
                  'hacker','propaganda','misinformation','rumeur','menace','attaque',
@@ -480,6 +480,6 @@ elif galerie == "Cyber-Vigilance":
 st.markdown("---")
 st.markdown(
     '<p style="text-align:center; color:#888; font-size:12px;">'
-    "🇧🇯 Bénin Insight Challenge 2026 — Équipe 6 | Données : GDELT Project | Dashboard v2.0"
+    "Bénin Insight Challenge 2026 — Équipe 6 | Données : GDELT Project | Dashboard v2.0"
     "</p>", unsafe_allow_html=True
 )
